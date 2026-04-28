@@ -10,13 +10,13 @@ local ZenithUI = {}
 ZenithUI.__index = ZenithUI
 
 local DEFAULT_THEME = {
-	Background = Color3.fromRGB(18, 22, 28),
-	Surface = Color3.fromRGB(22, 27, 34),
-	SurfaceAlt = Color3.fromRGB(27, 34, 43),
-	Stroke = Color3.fromRGB(43, 53, 67),
-	Text = Color3.fromRGB(243, 246, 250),
-	Muted = Color3.fromRGB(145, 153, 166),
-	Accent = Color3.fromRGB(96, 168, 255),
+	Background = Color3.fromRGB(20, 24, 31),
+	Surface = Color3.fromRGB(24, 29, 37),
+	SurfaceAlt = Color3.fromRGB(31, 38, 49),
+	Stroke = Color3.fromRGB(55, 66, 83),
+	Text = Color3.fromRGB(247, 248, 251),
+	Muted = Color3.fromRGB(153, 160, 173),
+	Accent = Color3.fromRGB(255, 122, 154),
 	Success = Color3.fromRGB(114, 214, 149),
 	Danger = Color3.fromRGB(255, 102, 120),
 }
@@ -340,13 +340,10 @@ function ZenithUI.new(options)
 	self.ButtonObjects = {}
 	self.ConfigStore = ConfigStore.new(self.ConfigRoot)
 	self._connections = {}
+	self._lastAutoloadState = nil
 
 	self:_build()
 	self:_wireToggleKey()
-	self:Notify({
-		Title = self.Title,
-		Content = supportsFiles() and "Config persistence ready." or "Running without file persistence.",
-	})
 	self:TryAutoload()
 
 	return self
@@ -429,6 +426,20 @@ function Window:SetSidebarTitle(text)
 	end
 end
 
+function Window:SetSettingsTitle(text)
+	self.SettingsTitle = text
+	if self.SettingsTitleLabel then
+		self.SettingsTitleLabel.Text = text
+	end
+end
+
+function Window:SetSettingsSubtitle(text)
+	self.SettingsSubtitle = text
+	if self.SettingsSubtitleLabel then
+		self.SettingsSubtitleLabel.Text = text
+	end
+end
+
 function Window:_build()
 	local theme = self.Theme
 
@@ -449,6 +460,7 @@ function Window:_build()
 		Parent = self.Gui,
 	})
 	corner(14).Parent = self.Root
+	self:_track("BackgroundObjects", self.Root, "BackgroundColor3")
 	self:_track("StrokeObjects", stroke(theme.Stroke, 1, 0), "Color").Parent = self.Root
 
 	local shadow = create("ImageLabel", {
@@ -456,15 +468,24 @@ function Window:_build()
 		BackgroundTransparency = 1,
 		Image = "rbxassetid://1316045217",
 		ImageColor3 = Color3.new(0, 0, 0),
-		ImageTransparency = 0.78,
+		ImageTransparency = 0.9,
 		Position = UDim2.fromScale(0.5, 0.5),
 		ScaleType = Enum.ScaleType.Slice,
-		Size = UDim2.new(1, 28, 1, 28),
+		Size = UDim2.new(1, 12, 1, 12),
 		SliceCenter = Rect.new(10, 10, 118, 118),
 		ZIndex = 0,
 		Parent = self.Root,
 	})
 	shadow.Name = "Shadow"
+
+	local accentLine = create("Frame", {
+		BackgroundColor3 = theme.Accent,
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(18, 54),
+		Size = UDim2.new(1, -36, 0, 2),
+		Parent = self.Root,
+	})
+	self:_track("AccentObjects", accentLine, "BackgroundColor3")
 
 	local topbar = create("Frame", {
 		BackgroundColor3 = theme.Surface,
@@ -616,11 +637,11 @@ function Window:_createConfigPanel()
 	local theme = self.Theme
 
 	local panel = create("Frame", {
-		AnchorPoint = Vector2.new(1, 0),
+		AnchorPoint = Vector2.new(0, 0),
 		BackgroundColor3 = theme.Surface,
 		BorderSizePixel = 0,
-		Position = UDim2.new(1, -18, 0, 68),
-		Size = UDim2.fromOffset(310, 356),
+		Position = UDim2.fromOffset(216, 66),
+		Size = UDim2.fromOffset(326, 392),
 		Visible = false,
 		ZIndex = 30,
 		Parent = self.Root,
@@ -663,28 +684,24 @@ function Window:_createConfigPanel()
 	local accentRow = create("Frame", {
 		BackgroundTransparency = 1,
 		Position = UDim2.fromOffset(0, 62),
-		Size = UDim2.new(1, 0, 0, 30),
+		Size = UDim2.new(1, 0, 0, 68),
 		ZIndex = 31,
 		Parent = panel,
 	})
 
-	create("UIListLayout", {
-		FillDirection = Enum.FillDirection.Horizontal,
-		Padding = UDim.new(0, 6),
+	create("UIGridLayout", {
+		CellPadding = UDim2.fromOffset(8, 8),
+		CellSize = UDim2.fromOffset(94, 30),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Parent = accentRow,
 	})
 
 	for name, color in pairs(ACCENT_PRESETS) do
-		local accentButton = makeButton(theme, name, UDim2.fromOffset(53, 30))
+		local accentButton = makeButton(theme, name, UDim2.fromOffset(94, 30))
 		accentButton.Parent = accentRow
 		table.insert(self.ButtonObjects, accentButton)
 		accentButton.MouseButton1Click:Connect(function()
 			self:SetAccentColor(color)
-			self:Notify({
-				Title = "Theme",
-				Content = string.format("%s accent applied", name),
-			})
 		end)
 	end
 
@@ -695,7 +712,7 @@ function Window:_createConfigPanel()
 		Font = Enum.Font.Gotham,
 		PlaceholderColor3 = theme.Muted,
 		PlaceholderText = "config name",
-		Position = UDim2.fromOffset(0, 104),
+		Position = UDim2.fromOffset(0, 132),
 		Size = UDim2.new(1, 0, 0, 36),
 		Text = self.ConfigName,
 		TextColor3 = theme.Text,
@@ -712,7 +729,7 @@ function Window:_createConfigPanel()
 
 	local buttonRow = create("Frame", {
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(0, 150),
+		Position = UDim2.fromOffset(0, 178),
 		Size = UDim2.new(1, 0, 0, 34),
 		ZIndex = 31,
 		Parent = panel,
@@ -725,9 +742,9 @@ function Window:_createConfigPanel()
 		Parent = buttonRow,
 	})
 
-	local save = makeButton(theme, "Save", UDim2.fromOffset(94, 34))
-	local load = makeButton(theme, "Load", UDim2.fromOffset(94, 34))
-	local refresh = makeButton(theme, "Refresh", UDim2.fromOffset(94, 34))
+	local save = makeButton(theme, "Kaydet", UDim2.fromOffset(102, 34))
+	local load = makeButton(theme, "Yukle", UDim2.fromOffset(102, 34))
+	local refresh = makeButton(theme, "Yenile", UDim2.fromOffset(102, 34))
 	save.Parent = buttonRow
 	load.Parent = buttonRow
 	refresh.Parent = buttonRow
@@ -738,7 +755,7 @@ function Window:_createConfigPanel()
 	local autoRow = create("Frame", {
 		BackgroundColor3 = theme.SurfaceAlt,
 		BorderSizePixel = 0,
-		Position = UDim2.fromOffset(0, 194),
+		Position = UDim2.fromOffset(0, 222),
 		Size = UDim2.new(1, 0, 0, 42),
 		ZIndex = 31,
 		Parent = panel,
@@ -785,10 +802,10 @@ function Window:_createConfigPanel()
 		BackgroundColor3 = theme.Background,
 		BorderSizePixel = 0,
 		CanvasSize = UDim2.new(),
-		Position = UDim2.fromOffset(0, 246),
+		Position = UDim2.fromOffset(0, 274),
 		ScrollBarImageColor3 = theme.Accent,
 		ScrollBarThickness = 3,
-		Size = UDim2.new(1, 0, 1, -292),
+		Size = UDim2.new(1, 0, 0, 70),
 		ZIndex = 31,
 		Parent = panel,
 	})
@@ -803,7 +820,7 @@ function Window:_createConfigPanel()
 	})
 
 	local unload = makeButton(theme, "Unload", UDim2.new(1, 0, 0, 34))
-	unload.Position = UDim2.new(0, 0, 1, -34)
+	unload.Position = UDim2.fromOffset(0, 352)
 	unload.ZIndex = 31
 	unload.Parent = panel
 	table.insert(self.ButtonObjects, unload)
@@ -811,6 +828,7 @@ function Window:_createConfigPanel()
 	local function syncAutoToggle()
 		local meta = self.ConfigStore:getMeta()
 		local active = meta.autoload == self.ConfigName
+		self._lastAutoloadState = active
 		autoToggle.BackgroundColor3 = active and theme.Accent or theme.Background
 		TweenService:Create(autoKnob, TweenInfo.new(0.15), {
 			Position = active and UDim2.new(1, -18, 0.5, 0) or UDim2.fromOffset(2, 10),
@@ -835,6 +853,7 @@ function Window:_createConfigPanel()
 				ZIndex = 31,
 				Parent = listFrame,
 			})
+			self:_track("SurfaceAltObjects", item, "BackgroundColor3")
 			corner(8).Parent = item
 			self:_track("StrokeObjects", stroke(theme.Stroke, 1, 0.15), "Color").Parent = item
 
@@ -890,13 +909,10 @@ function Window:_createConfigPanel()
 	autoToggle.MouseButton1Click:Connect(function()
 		self.ConfigName = input.Text ~= "" and input.Text or self.ConfigName
 		local meta = self.ConfigStore:getMeta()
-		meta.autoload = (meta.autoload == self.ConfigName) and nil or self.ConfigName
+		local shouldEnable = meta.autoload ~= self.ConfigName
+		meta.autoload = shouldEnable and self.ConfigName or nil
 		self.ConfigStore:setMeta(meta)
 		syncAutoToggle()
-		self:Notify({
-			Title = "Autoload",
-			Content = meta.autoload and ("Enabled for " .. meta.autoload) or "Autoload disabled",
-		})
 	end)
 
 	self._refreshConfigs = refreshConfigList
@@ -969,28 +985,16 @@ end
 function Window:SaveConfig(name)
 	name = name or self.ConfigName
 	self.ConfigStore:save(name, self:CollectConfig())
-	self:Notify({
-		Title = "Config Saved",
-		Content = string.format("Stored as %s", name),
-	})
 end
 
 function Window:LoadConfig(name)
 	name = name or self.ConfigName
 	local payload = self.ConfigStore:load(name)
 	if not payload then
-		self:Notify({
-			Title = "Config Missing",
-			Content = string.format("No config named %s", name),
-		})
 		return
 	end
 
 	self:ApplyConfig(payload)
-	self:Notify({
-		Title = "Config Loaded",
-		Content = string.format("Applied %s", name),
-	})
 end
 
 function Window:TryAutoload()
