@@ -848,6 +848,18 @@ function Window:_createConfigPanel()
 	self:_track("TextObjects", autoKnob, "BackgroundColor3")
 	corner(8).Parent = autoKnob
 
+	local autoClickProxy = create("TextButton", {
+		AnchorPoint = Vector2.new(1, 0.5),
+		AutoButtonColor = false,
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Position = UDim2.new(1, -12, 0.5, 0),
+		Size = UDim2.fromOffset(40, 22),
+		Text = "",
+		ZIndex = 14,
+		Parent = autoRow,
+	})
+
 	local listFrame = create("Frame", {
 		BackgroundColor3 = theme.Background,
 		BorderSizePixel = 0,
@@ -988,7 +1000,7 @@ function Window:_createConfigPanel()
 				Position = UDim2.new(1, -106, 0, 34),
 				Size = UDim2.fromOffset(34, 18),
 				Text = "",
-				ZIndex = 12,
+				ZIndex = 14,
 				Parent = item,
 			})
 			corner(9).Parent = rowAuto
@@ -1004,6 +1016,27 @@ function Window:_createConfigPanel()
 			})
 			corner(7).Parent = rowKnob
 
+			local rowClickProxy = create("TextButton", {
+				AnchorPoint = Vector2.new(1, 0),
+				AutoButtonColor = false,
+				BackgroundTransparency = 1,
+				BorderSizePixel = 0,
+				Position = UDim2.new(1, -106, 0, 34),
+				Size = UDim2.fromOffset(34, 18),
+				Text = "",
+				ZIndex = 15,
+				Parent = item,
+			})
+			rowClickProxy.MouseButton1Click:Connect(function()
+				local rowMeta = self.ConfigStore:getMeta()
+				rowMeta.autoload = rowMeta.autoload == name and nil or name
+				self.ConfigStore:setMeta(rowMeta)
+				if name == self.ConfigName then
+					syncAutoToggle()
+				end
+				refreshConfigList()
+			end)
+
 			local autoText = createLabel(theme, "Autoload", theme.Muted, UDim2.fromOffset(64, 16))
 			autoText.Position = UDim2.new(1, -174, 0, 35)
 			autoText.TextSize = 10
@@ -1014,14 +1047,14 @@ function Window:_createConfigPanel()
 			local loadButton = makeButton(theme, "Use", UDim2.fromOffset(56, 24))
 			loadButton.AnchorPoint = Vector2.new(1, 0)
 			loadButton.Position = UDim2.new(1, -8, 0, 8)
-			loadButton.ZIndex = 12
+			loadButton.ZIndex = 14
 			loadButton.Parent = item
 			table.insert(self.ButtonObjects, loadButton)
 
 			local overwriteButton = makeButton(theme, "Yaz", UDim2.fromOffset(42, 20))
 			overwriteButton.AnchorPoint = Vector2.new(1, 0)
 			overwriteButton.Position = UDim2.new(1, -56, 0, 38)
-			overwriteButton.ZIndex = 12
+			overwriteButton.ZIndex = 14
 			overwriteButton.TextSize = 11
 			overwriteButton.Parent = item
 			table.insert(self.ButtonObjects, overwriteButton)
@@ -1029,7 +1062,7 @@ function Window:_createConfigPanel()
 			local deleteButton = makeButton(theme, "Sil", UDim2.fromOffset(42, 20))
 			deleteButton.AnchorPoint = Vector2.new(1, 0)
 			deleteButton.Position = UDim2.new(1, -8, 0, 38)
-			deleteButton.ZIndex = 12
+			deleteButton.ZIndex = 14
 			deleteButton.TextSize = 11
 			deleteButton.Parent = item
 			table.insert(self.ButtonObjects, deleteButton)
@@ -1119,14 +1152,16 @@ function Window:_createConfigPanel()
 	end)
 	confirmNo.MouseButton1Click:Connect(hideConfirm)
 
-	autoToggle.MouseButton1Click:Connect(function()
+	local function onAutoToggleClick()
 		self.ConfigName = input.Text ~= "" and input.Text or self.ConfigName
 		local meta = self.ConfigStore:getMeta()
 		local shouldEnable = meta.autoload ~= self.ConfigName
 		meta.autoload = shouldEnable and self.ConfigName or nil
 		self.ConfigStore:setMeta(meta)
 		syncAutoToggle()
-	end)
+	end
+	autoToggle.MouseButton1Click:Connect(onAutoToggleClick)
+	autoClickProxy.MouseButton1Click:Connect(onAutoToggleClick)
 
 	self._refreshConfigs = refreshConfigList
 	refreshConfigList()
