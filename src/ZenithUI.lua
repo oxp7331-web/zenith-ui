@@ -648,70 +648,74 @@ end
 function Window:_createConfigPanel()
 	local theme = self.Theme
 
-	local backdrop = create("Frame", {
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundColor3 = Color3.new(0, 0, 0),
-		BackgroundTransparency = 0.4,
+	local panel = create("ScrollingFrame", {
+		Active = true,
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		BackgroundColor3 = theme.Surface,
 		BorderSizePixel = 0,
-		Position = UDim2.fromScale(0.5, 0.5),
+		CanvasSize = UDim2.new(),
+		Position = UDim2.new(0, 0, 0, 0),
+		ScrollBarImageColor3 = theme.Accent,
+		ScrollBarThickness = 4,
 		Size = UDim2.new(1, 0, 1, 0),
 		Visible = false,
-		ZIndex = 100,
-		Parent = self.Gui,
+		ZIndex = 10,
+		Parent = self.Content,
+	})
+	self:_track("SurfaceObjects", panel, "BackgroundColor3")
+	self:_track("AccentObjects", panel, "ScrollBarImageColor3")
+	corner(12).Parent = panel
+	padding(14, 14, 14, 14).Parent = panel
+
+	local contentLayout = create("UIListLayout", {
+		Padding = UDim.new(0, 12),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = panel,
 	})
 
-	local panel = create("Frame", {
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundColor3 = theme.Background,
-		BorderSizePixel = 0,
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromOffset(360, 420),
-		Visible = false,
-		ZIndex = 101,
-		Parent = self.Gui,
+	local headerRow = create("Frame", {
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 24),
+		ZIndex = 11,
+		LayoutOrder = 0,
+		Parent = panel,
 	})
-	self:_track("BackgroundObjects", panel, "BackgroundColor3")
-	corner(16).Parent = panel
-	self:_track("StrokeObjects", stroke(theme.Stroke, 1, 0.1), "Color").Parent = panel
-	padding(16, 16, 16, 16).Parent = panel
-
-	self.ConfigBackdrop = backdrop
 
 	local title = createLabel(theme, self.SettingsTitle, theme.Text, UDim2.new(1, -36, 0, 18))
 	title.Font = Enum.Font.GothamBold
 	title.TextSize = 15
-	title.ZIndex = 102
-	title.Parent = panel
+	title.ZIndex = 11
+	title.Parent = headerRow
 	self.SettingsTitleLabel = title
 	self:_track("TextObjects", title, "TextColor3")
 
 	local close = makeButton(theme, "X", UDim2.fromOffset(24, 24))
 	close.AnchorPoint = Vector2.new(1, 0)
 	close.Position = UDim2.new(1, 0, 0, 0)
-	close.ZIndex = 102
-	close.Parent = panel
+	close.ZIndex = 11
+	close.Parent = headerRow
 	table.insert(self.ButtonObjects, close)
 
 	local sub = createLabel(theme, self.SettingsSubtitle, theme.Muted, UDim2.new(1, 0, 0, 16))
-	sub.Position = UDim2.fromOffset(0, 22)
 	sub.TextSize = 11
-	sub.ZIndex = 102
+	sub.ZIndex = 11
+	sub.LayoutOrder = 1
 	sub.Parent = panel
 	self.SettingsSubtitleLabel = sub
 	self:_track("MutedTextObjects", sub, "TextColor3")
 
 	local appearanceLabel = createLabel(theme, "Accent", theme.Muted, UDim2.new(1, 0, 0, 16))
-	appearanceLabel.Position = UDim2.fromOffset(0, 46)
 	appearanceLabel.TextSize = 11
-	appearanceLabel.ZIndex = 102
+	appearanceLabel.ZIndex = 11
+	appearanceLabel.LayoutOrder = 2
 	appearanceLabel.Parent = panel
 	self:_track("MutedTextObjects", appearanceLabel, "TextColor3")
 
 	local accentRow = create("Frame", {
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(0, 68),
 		Size = UDim2.new(1, 0, 0, 68),
-		ZIndex = 102,
+		ZIndex = 11,
+		LayoutOrder = 3,
 		Parent = panel,
 	})
 
@@ -738,12 +742,12 @@ function Window:_createConfigPanel()
 		Font = Enum.Font.Gotham,
 		PlaceholderColor3 = theme.Muted,
 		PlaceholderText = "config name",
-		Position = UDim2.fromOffset(0, 140),
 		Size = UDim2.new(1, 0, 0, 36),
 		Text = self.ConfigName,
 		TextColor3 = theme.Text,
 		TextSize = 13,
-		ZIndex = 102,
+		ZIndex = 11,
+		LayoutOrder = 4,
 		Parent = panel,
 	})
 	self:_track("SurfaceAltObjects", input, "BackgroundColor3")
@@ -755,9 +759,9 @@ function Window:_createConfigPanel()
 
 	local buttonRow = create("Frame", {
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(0, 184),
 		Size = UDim2.new(1, 0, 0, 34),
-		ZIndex = 102,
+		ZIndex = 11,
+		LayoutOrder = 5,
 		Parent = panel,
 	})
 
@@ -785,12 +789,12 @@ function Window:_createConfigPanel()
 		Font = Enum.Font.Gotham,
 		PlaceholderColor3 = theme.Muted,
 		PlaceholderText = "Config ara...",
-		Position = UDim2.fromOffset(0, 226),
 		Size = UDim2.new(1, 0, 0, 34),
 		Text = "",
 		TextColor3 = theme.Text,
 		TextSize = 13,
-		ZIndex = 102,
+		ZIndex = 11,
+		LayoutOrder = 6,
 		Parent = panel,
 	})
 	self:_track("SurfaceAltObjects", searchBox, "BackgroundColor3")
@@ -803,9 +807,9 @@ function Window:_createConfigPanel()
 	local autoRow = create("Frame", {
 		BackgroundColor3 = theme.SurfaceAlt,
 		BorderSizePixel = 0,
-		Position = UDim2.fromOffset(0, 268),
 		Size = UDim2.new(1, 0, 0, 70),
-		ZIndex = 102,
+		ZIndex = 11,
+		LayoutOrder = 7,
 		Parent = panel,
 	})
 	self:_track("SurfaceAltObjects", autoRow, "BackgroundColor3")
@@ -814,7 +818,7 @@ function Window:_createConfigPanel()
 
 	local autoLabel = createLabel(theme, "Autoload this config", theme.Text, UDim2.new(1, -60, 0, 18))
 	autoLabel.Position = UDim2.fromOffset(12, 12)
-	autoLabel.ZIndex = 103
+	autoLabel.ZIndex = 12
 	autoLabel.Parent = autoRow
 	self:_track("TextObjects", autoLabel, "TextColor3")
 
@@ -826,7 +830,7 @@ function Window:_createConfigPanel()
 		Position = UDim2.new(1, -12, 0.5, 0),
 		Size = UDim2.fromOffset(40, 22),
 		Text = "",
-		ZIndex = 103,
+		ZIndex = 12,
 		Parent = autoRow,
 	})
 	self:_track("BackgroundObjects", autoToggle, "BackgroundColor3")
@@ -838,48 +842,43 @@ function Window:_createConfigPanel()
 		BorderSizePixel = 0,
 		Position = UDim2.fromOffset(3, 11),
 		Size = UDim2.fromOffset(16, 16),
-		ZIndex = 104,
+		ZIndex = 13,
 		Parent = autoToggle,
 	})
 	self:_track("TextObjects", autoKnob, "BackgroundColor3")
 	corner(8).Parent = autoKnob
 
-	local listFrame = create("ScrollingFrame", {
-		Active = true,
-		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+	local listFrame = create("Frame", {
 		BackgroundColor3 = theme.Background,
 		BorderSizePixel = 0,
-		CanvasSize = UDim2.new(),
-		Position = UDim2.fromOffset(0, 346),
-		ScrollBarImageColor3 = theme.Accent,
-		ScrollBarThickness = 4,
-		Size = UDim2.new(1, 0, 0, 42),
-		ZIndex = 102,
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Size = UDim2.new(1, 0, 0, 0),
+		ZIndex = 11,
+		LayoutOrder = 8,
 		Parent = panel,
 	})
-	self:_track("BackgroundObjects", listFrame, "BackgroundColor3")
-	self:_track("AccentObjects", listFrame, "ScrollBarImageColor3")
-	corner(8).Parent = listFrame
-	padding(8, 8, 8, 8).Parent = listFrame
 	create("UIListLayout", {
 		Padding = UDim.new(0, 6),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Parent = listFrame,
 	})
+	self:_track("BackgroundObjects", listFrame, "BackgroundColor3")
+	corner(8).Parent = listFrame
+	padding(8, 8, 8, 8).Parent = listFrame
 
 	local unload = makeButton(theme, "Unload", UDim2.new(1, 0, 0, 34))
-	unload.Position = UDim2.fromOffset(0, 348)
-	unload.ZIndex = 102
+	unload.ZIndex = 11
+	unload.LayoutOrder = 9
 	unload.Parent = panel
 	table.insert(self.ButtonObjects, unload)
 
 	local confirmRow = create("Frame", {
 		BackgroundColor3 = theme.SurfaceAlt,
 		BorderSizePixel = 0,
-		Position = UDim2.fromOffset(0, 348),
 		Size = UDim2.new(1, 0, 0, 34),
 		Visible = false,
-		ZIndex = 103,
+		ZIndex = 12,
+		LayoutOrder = 9,
 		Parent = panel,
 	})
 	self:_track("SurfaceAltObjects", confirmRow, "BackgroundColor3")
@@ -888,7 +887,7 @@ function Window:_createConfigPanel()
 
 	local confirmLabel = createLabel(theme, "", theme.Text, UDim2.new(1, -124, 1, 0))
 	confirmLabel.Position = UDim2.fromOffset(10, 0)
-	confirmLabel.ZIndex = 104
+	confirmLabel.ZIndex = 13
 	confirmLabel.TextSize = 11
 	confirmLabel.Parent = confirmRow
 	self:_track("TextObjects", confirmLabel, "TextColor3")
@@ -896,14 +895,14 @@ function Window:_createConfigPanel()
 	local confirmYes = makeButton(theme, "Evet", UDim2.fromOffset(54, 24))
 	confirmYes.AnchorPoint = Vector2.new(1, 0.5)
 	confirmYes.Position = UDim2.new(1, -62, 0.5, 0)
-	confirmYes.ZIndex = 104
+	confirmYes.ZIndex = 13
 	confirmYes.Parent = confirmRow
 	table.insert(self.ButtonObjects, confirmYes)
 
 	local confirmNo = makeButton(theme, "Vazgec", UDim2.fromOffset(54, 24))
 	confirmNo.AnchorPoint = Vector2.new(1, 0.5)
 	confirmNo.Position = UDim2.new(1, -4, 0.5, 0)
-	confirmNo.ZIndex = 104
+	confirmNo.ZIndex = 13
 	confirmNo.Parent = confirmRow
 	table.insert(self.ButtonObjects, confirmNo)
 
@@ -950,7 +949,7 @@ function Window:_createConfigPanel()
 				BackgroundColor3 = theme.SurfaceAlt,
 				BorderSizePixel = 0,
 				Size = UDim2.new(1, 0, 0, 66),
-				ZIndex = 102,
+				ZIndex = 11,
 				Parent = listFrame,
 			})
 			self:_track("SurfaceAltObjects", item, "BackgroundColor3")
@@ -962,13 +961,13 @@ function Window:_createConfigPanel()
 				BorderSizePixel = 0,
 				Position = UDim2.fromOffset(0, 0),
 				Size = UDim2.fromOffset(4, 66),
-				ZIndex = 103,
+				ZIndex = 12,
 				Parent = item,
 			})
 
 			local label = createLabel(theme, name, self.ActiveConfigName == name and theme.Text or theme.Text, UDim2.new(1, -164, 0, 18))
 			label.Position = UDim2.fromOffset(14, 8)
-			label.ZIndex = 103
+			label.ZIndex = 12
 			label.Font = self.ActiveConfigName == name and Enum.Font.GothamBold or Enum.Font.Gotham
 			label.Parent = item
 			self:_track("TextObjects", label, "TextColor3")
@@ -976,7 +975,7 @@ function Window:_createConfigPanel()
 			local status = createLabel(theme, self.ActiveConfigName == name and "Yuklu" or "-", self.ActiveConfigName == name and theme.Accent or theme.Muted, UDim2.fromOffset(72, 16))
 			status.Position = UDim2.new(1, -154, 0, 10)
 			status.TextXAlignment = Enum.TextXAlignment.Right
-			status.ZIndex = 103
+			status.ZIndex = 12
 			status.Parent = item
 			self:_track(self.ActiveConfigName == name and "AccentObjects" or "MutedTextObjects", status, "TextColor3")
 
@@ -989,7 +988,7 @@ function Window:_createConfigPanel()
 				Position = UDim2.new(1, -106, 0, 34),
 				Size = UDim2.fromOffset(34, 18),
 				Text = "",
-				ZIndex = 103,
+				ZIndex = 12,
 				Parent = item,
 			})
 			corner(9).Parent = rowAuto
@@ -1000,7 +999,7 @@ function Window:_createConfigPanel()
 				BorderSizePixel = 0,
 				Position = meta.autoload == name and UDim2.new(1, -16, 0.5, 0) or UDim2.fromOffset(2, 9),
 				Size = UDim2.fromOffset(14, 14),
-				ZIndex = 104,
+				ZIndex = 13,
 				Parent = rowAuto,
 			})
 			corner(7).Parent = rowKnob
@@ -1008,21 +1007,21 @@ function Window:_createConfigPanel()
 			local autoText = createLabel(theme, "Autoload", theme.Muted, UDim2.fromOffset(64, 16))
 			autoText.Position = UDim2.new(1, -174, 0, 35)
 			autoText.TextSize = 10
-			autoText.ZIndex = 103
+			autoText.ZIndex = 12
 			autoText.Parent = item
 			self:_track("MutedTextObjects", autoText, "TextColor3")
 
 			local loadButton = makeButton(theme, "Use", UDim2.fromOffset(56, 24))
 			loadButton.AnchorPoint = Vector2.new(1, 0)
 			loadButton.Position = UDim2.new(1, -8, 0, 8)
-			loadButton.ZIndex = 103
+			loadButton.ZIndex = 12
 			loadButton.Parent = item
 			table.insert(self.ButtonObjects, loadButton)
 
 			local overwriteButton = makeButton(theme, "Yaz", UDim2.fromOffset(42, 20))
 			overwriteButton.AnchorPoint = Vector2.new(1, 0)
 			overwriteButton.Position = UDim2.new(1, -56, 0, 38)
-			overwriteButton.ZIndex = 103
+			overwriteButton.ZIndex = 12
 			overwriteButton.TextSize = 11
 			overwriteButton.Parent = item
 			table.insert(self.ButtonObjects, overwriteButton)
@@ -1030,7 +1029,7 @@ function Window:_createConfigPanel()
 			local deleteButton = makeButton(theme, "Sil", UDim2.fromOffset(42, 20))
 			deleteButton.AnchorPoint = Vector2.new(1, 0)
 			deleteButton.Position = UDim2.new(1, -8, 0, 38)
-			deleteButton.ZIndex = 103
+			deleteButton.ZIndex = 12
 			deleteButton.TextSize = 11
 			deleteButton.Parent = item
 			table.insert(self.ButtonObjects, deleteButton)
@@ -1147,9 +1146,7 @@ end
 
 function Window:SetConfigMenuVisible(visible)
 	self.ConfigPanel.Visible = visible
-	if self.ConfigBackdrop then
-		self.ConfigBackdrop.Visible = visible
-	end
+	self.Pages.Visible = not visible
 	if visible and self._refreshConfigs then
 		self._refreshConfigs()
 	end
@@ -1159,9 +1156,7 @@ function Window:Toggle()
 	self.Root.Visible = not self.Root.Visible
 	if not self.Root.Visible then
 		self.ConfigPanel.Visible = false
-		if self.ConfigBackdrop then
-			self.ConfigBackdrop.Visible = false
-		end
+		self.Pages.Visible = true
 	end
 end
 
@@ -1325,6 +1320,9 @@ function Window:AddTab(options)
 		page.Visible = true
 		button.BackgroundColor3 = theme.Accent
 		button.TextColor3 = Color3.fromRGB(255, 255, 255)
+
+		self.ConfigPanel.Visible = false
+		self.Pages.Visible = true
 	end
 
 	button.MouseButton1Click:Connect(selectTab)
