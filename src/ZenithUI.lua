@@ -607,8 +607,11 @@ function Window:_build()
 	self.HideButton = hideButton
 	self.ConfigButton = configButton
 
-	self.Pages = create("Folder", {
+	self.Pages = create("Frame", {
 		Name = "Pages",
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 1, 0),
 		Parent = content,
 	})
 
