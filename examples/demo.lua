@@ -1,4 +1,4 @@
-local ZenithUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/yourname/zenith-ui/main/src/ZenithUI.lua"))()
+local ZenithUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/oxp7331-web/zenith-ui/main/src/ZenithUI.lua"))()
 
 local Window = ZenithUI.new({
 	Title = "Zenith UI",
@@ -66,4 +66,3 @@ Visuals:AddButton({
 		})
 	end,
 })
-

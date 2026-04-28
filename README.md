@@ -18,7 +18,7 @@ Instead of copying the louder "cheat panel" look that many public libraries use,
 ## Usage
 
 ```lua
-local ZenithUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/yourname/zenith-ui/main/src/ZenithUI.lua"))()
+local ZenithUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/oxp7331-web/zenith-ui/main/src/ZenithUI.lua"))()
 
 local Window = ZenithUI.new({
     Title = "Zenith UI",
@@ -41,6 +41,27 @@ MainSection:AddToggle({
 ```
 
 Full example: [examples/demo.lua](/C:/Users/soact/Documents/itadoriyuji/uilibrary/examples/demo.lua)
+
+## Loader notes
+
+For exploit usage, call the loader with `:`:
+
+```lua
+local ZenithUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/oxp7331-web/zenith-ui/main/src/ZenithUI.lua"))()
+```
+
+Not this:
+
+```lua
+local ZenithUI = loadstring(game.HttpGet("https://raw.githubusercontent.com/oxp7331-web/zenith-ui/main/src/ZenithUI.lua"))()
+```
+
+If you are testing in Roblox Studio instead of an executor, `game:HttpGet()` may still be unavailable. In that case use `HttpService:GetAsync()` with HTTP enabled:
+
+```lua
+local HttpService = game:GetService("HttpService")
+local ZenithUI = loadstring(HttpService:GetAsync("https://raw.githubusercontent.com/oxp7331-web/zenith-ui/main/src/ZenithUI.lua"))()
+```
 
 ## API
 

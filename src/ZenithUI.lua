@@ -911,7 +911,7 @@ function Window:AddTab(options)
 		Sections = {},
 	}, Tab)
 
-	button.MouseButton1Click:Connect(function()
+	local function selectTab()
 		for _, other in ipairs(self.Tabs) do
 			other.Page.Visible = false
 			TweenService:Create(other.Button, TweenInfo.new(0.12), {
@@ -925,14 +925,13 @@ function Window:AddTab(options)
 			BackgroundColor3 = theme.Accent,
 			TextColor3 = Color3.fromRGB(255, 255, 255),
 		}):Play()
-	end)
+	end
+
+	button.MouseButton1Click:Connect(selectTab)
 
 	table.insert(self.Tabs, tab)
 	if #self.Tabs == 1 then
-		button:Activate()
-		page.Visible = true
-		button.BackgroundColor3 = theme.Accent
-		button.TextColor3 = Color3.fromRGB(255, 255, 255)
+		selectTab()
 	end
 
 	return tab
