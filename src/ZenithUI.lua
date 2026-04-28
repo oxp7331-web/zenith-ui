@@ -10,15 +10,23 @@ local ZenithUI = {}
 ZenithUI.__index = ZenithUI
 
 local DEFAULT_THEME = {
-	Background = Color3.fromRGB(11, 14, 18),
-	Surface = Color3.fromRGB(16, 20, 25),
-	SurfaceAlt = Color3.fromRGB(21, 27, 34),
-	Stroke = Color3.fromRGB(38, 46, 58),
+	Background = Color3.fromRGB(18, 22, 28),
+	Surface = Color3.fromRGB(22, 27, 34),
+	SurfaceAlt = Color3.fromRGB(27, 34, 43),
+	Stroke = Color3.fromRGB(43, 53, 67),
 	Text = Color3.fromRGB(243, 246, 250),
 	Muted = Color3.fromRGB(145, 153, 166),
 	Accent = Color3.fromRGB(96, 168, 255),
 	Success = Color3.fromRGB(114, 214, 149),
 	Danger = Color3.fromRGB(255, 102, 120),
+}
+
+local ACCENT_PRESETS = {
+	Ocean = Color3.fromRGB(96, 168, 255),
+	Graphite = Color3.fromRGB(162, 172, 186),
+	Mint = Color3.fromRGB(102, 214, 181),
+	Rose = Color3.fromRGB(255, 128, 156),
+	Amber = Color3.fromRGB(255, 191, 94),
 }
 
 local function mergeTheme(base, override)
@@ -309,14 +317,27 @@ function ZenithUI.new(options)
 	local self = setmetatable({}, Window)
 	self.Theme = mergeTheme(DEFAULT_THEME, options.Theme)
 	self.Title = options.Title or "Zenith UI"
-	self.Subtitle = options.Subtitle or "minimal control surface"
+	self.Subtitle = options.Subtitle or "runtime panel"
+	self.SidebarTitle = options.SidebarTitle or "navigation"
+	self.SettingsTitle = options.SettingsTitle or "Settings"
+	self.SettingsSubtitle = options.SettingsSubtitle or "theme, config and session controls"
+	self.SettingsButtonText = options.SettingsButtonText or "Settings"
 	self.ToggleKey = options.ToggleKey or Enum.KeyCode.RightShift
 	self.ConfigRoot = options.ConfigFolder or "ZenithUI"
 	self.ConfigName = options.DefaultConfig or "default"
+	self.SelectedTab = nil
 	self.Flags = {}
 	self.Controls = {}
 	self.Tabs = {}
 	self.Notifications = {}
+	self.SurfaceObjects = {}
+	self.BackgroundObjects = {}
+	self.SurfaceAltObjects = {}
+	self.StrokeObjects = {}
+	self.TextObjects = {}
+	self.MutedTextObjects = {}
+	self.AccentObjects = {}
+	self.ButtonObjects = {}
 	self.ConfigStore = ConfigStore.new(self.ConfigRoot)
 	self._connections = {}
 
@@ -329,6 +350,83 @@ function ZenithUI.new(options)
 	self:TryAutoload()
 
 	return self
+end
+
+function Window:_track(listName, instance, property)
+	table.insert(self[listName], {
+		Instance = instance,
+		Property = property,
+	})
+	return instance
+end
+
+function Window:_applyThemeGroup(group, value)
+	for _, item in ipairs(group) do
+		if item.Instance and item.Instance.Parent then
+			item.Instance[item.Property] = value
+		end
+	end
+end
+
+function Window:_refreshTheme()
+	self:_applyThemeGroup(self.SurfaceObjects, self.Theme.Surface)
+	self:_applyThemeGroup(self.BackgroundObjects, self.Theme.Background)
+	self:_applyThemeGroup(self.SurfaceAltObjects, self.Theme.SurfaceAlt)
+	self:_applyThemeGroup(self.StrokeObjects, self.Theme.Stroke)
+	self:_applyThemeGroup(self.TextObjects, self.Theme.Text)
+	self:_applyThemeGroup(self.MutedTextObjects, self.Theme.Muted)
+	self:_applyThemeGroup(self.AccentObjects, self.Theme.Accent)
+
+	for _, button in ipairs(self.ButtonObjects) do
+		if button and button.Parent then
+			button.BackgroundColor3 = self.Theme.SurfaceAlt
+			button.TextColor3 = self.Theme.Text
+		end
+	end
+
+	for _, tab in ipairs(self.Tabs) do
+		if tab.Button and tab.Button.Parent then
+			if tab == self.SelectedTab then
+				tab.Button.BackgroundColor3 = self.Theme.Accent
+				tab.Button.TextColor3 = Color3.fromRGB(255, 255, 255)
+			else
+				tab.Button.BackgroundColor3 = self.Theme.Background
+				tab.Button.TextColor3 = self.Theme.Muted
+			end
+		end
+	end
+
+	for id, control in pairs(self.Controls) do
+		if control.SetVisual then
+			control.SetVisual(self.Flags[id])
+		end
+	end
+end
+
+function Window:SetAccentColor(color)
+	self.Theme.Accent = color
+	self:_refreshTheme()
+end
+
+function Window:SetTitle(text)
+	self.Title = text
+	if self.TitleLabel then
+		self.TitleLabel.Text = text
+	end
+end
+
+function Window:SetSubtitle(text)
+	self.Subtitle = text
+	if self.SubtitleLabel then
+		self.SubtitleLabel.Text = text
+	end
+end
+
+function Window:SetSidebarTitle(text)
+	self.SidebarTitle = text
+	if self.SidebarLabel then
+		self.SidebarLabel.Text = text
+	end
 end
 
 function Window:_build()
@@ -351,17 +449,17 @@ function Window:_build()
 		Parent = self.Gui,
 	})
 	corner(14).Parent = self.Root
-	stroke(theme.Stroke, 1, 0).Parent = self.Root
+	self:_track("StrokeObjects", stroke(theme.Stroke, 1, 0), "Color").Parent = self.Root
 
 	local shadow = create("ImageLabel", {
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundTransparency = 1,
 		Image = "rbxassetid://1316045217",
 		ImageColor3 = Color3.new(0, 0, 0),
-		ImageTransparency = 0.62,
+		ImageTransparency = 0.78,
 		Position = UDim2.fromScale(0.5, 0.5),
 		ScaleType = Enum.ScaleType.Slice,
-		Size = UDim2.new(1, 56, 1, 56),
+		Size = UDim2.new(1, 28, 1, 28),
 		SliceCenter = Rect.new(10, 10, 118, 118),
 		ZIndex = 0,
 		Parent = self.Root,
@@ -374,6 +472,7 @@ function Window:_build()
 		Size = UDim2.new(1, 0, 0, 54),
 		Parent = self.Root,
 	})
+	self:_track("SurfaceObjects", topbar, "BackgroundColor3")
 	corner(14).Parent = topbar
 
 	local topCover = create("Frame", {
@@ -384,6 +483,7 @@ function Window:_build()
 		Size = UDim2.new(1, 0, 0, 14),
 		Parent = topbar,
 	})
+	self:_track("SurfaceObjects", topCover, "BackgroundColor3")
 
 	local titleHolder = create("Frame", {
 		BackgroundTransparency = 1,
@@ -396,17 +496,21 @@ function Window:_build()
 	title.Font = Enum.Font.GothamBold
 	title.TextSize = 16
 	title.Parent = titleHolder
+	self.TitleLabel = title
+	self:_track("TextObjects", title, "TextColor3")
 
 	local subtitle = createLabel(theme, self.Subtitle, theme.Muted, UDim2.new(1, 0, 0, 16))
 	subtitle.Position = UDim2.fromOffset(0, 20)
 	subtitle.TextSize = 11
 	subtitle.Parent = titleHolder
+	self.SubtitleLabel = subtitle
+	self:_track("MutedTextObjects", subtitle, "TextColor3")
 
 	local topButtons = create("Frame", {
 		AnchorPoint = Vector2.new(1, 0.5),
 		BackgroundTransparency = 1,
 		Position = UDim2.new(1, -16, 0.5, 0),
-		Size = UDim2.fromOffset(128, 30),
+		Size = UDim2.fromOffset(172, 30),
 		Parent = topbar,
 	})
 
@@ -422,10 +526,12 @@ function Window:_build()
 	local hideButton = makeButton(theme, "_", UDim2.fromOffset(38, 30))
 	hideButton.LayoutOrder = 1
 	hideButton.Parent = topButtons
+	table.insert(self.ButtonObjects, hideButton)
 
-	local configButton = makeButton(theme, "CFG", UDim2.fromOffset(48, 30))
+	local configButton = makeButton(theme, self.SettingsButtonText, UDim2.fromOffset(118, 30))
 	configButton.LayoutOrder = 2
 	configButton.Parent = topButtons
+	table.insert(self.ButtonObjects, configButton)
 
 	local sidebar = create("Frame", {
 		BackgroundColor3 = theme.Surface,
@@ -434,20 +540,23 @@ function Window:_build()
 		Size = UDim2.new(0, 180, 1, -78),
 		Parent = self.Root,
 	})
+	self:_track("SurfaceObjects", sidebar, "BackgroundColor3")
 	corner(12).Parent = sidebar
-	stroke(theme.Stroke, 1, 0.1).Parent = sidebar
+	self:_track("StrokeObjects", stroke(theme.Stroke, 1, 0.1), "Color").Parent = sidebar
 	padding(14, 12, 14, 12).Parent = sidebar
 
-	local sideList = create("UIListLayout", {
+	create("UIListLayout", {
 		Padding = UDim.new(0, 8),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Parent = sidebar,
 	})
 
-	local brand = createLabel(theme, "workspace", theme.Muted, UDim2.new(1, 0, 0, 16))
+	local brand = createLabel(theme, self.SidebarTitle, theme.Muted, UDim2.new(1, 0, 0, 16))
 	brand.TextSize = 11
 	brand.LayoutOrder = 0
 	brand.Parent = sidebar
+	self.SidebarLabel = brand
+	self:_track("MutedTextObjects", brand, "TextColor3")
 
 	local content = create("Frame", {
 		BackgroundColor3 = theme.Surface,
@@ -456,8 +565,9 @@ function Window:_build()
 		Size = UDim2.new(1, -216, 1, -78),
 		Parent = self.Root,
 	})
+	self:_track("SurfaceObjects", content, "BackgroundColor3")
 	corner(12).Parent = content
-	stroke(theme.Stroke, 1, 0.1).Parent = content
+	self:_track("StrokeObjects", stroke(theme.Stroke, 1, 0.1), "Color").Parent = content
 
 	self.Sidebar = sidebar
 	self.Content = content
@@ -510,32 +620,73 @@ function Window:_createConfigPanel()
 		BackgroundColor3 = theme.Surface,
 		BorderSizePixel = 0,
 		Position = UDim2.new(1, -18, 0, 68),
-		Size = UDim2.fromOffset(270, 320),
+		Size = UDim2.fromOffset(310, 356),
 		Visible = false,
 		ZIndex = 30,
 		Parent = self.Root,
 	})
+	self:_track("SurfaceObjects", panel, "BackgroundColor3")
 	corner(12).Parent = panel
-	stroke(theme.Stroke, 1, 0).Parent = panel
+	self:_track("StrokeObjects", stroke(theme.Stroke, 1, 0), "Color").Parent = panel
 	padding(12, 12, 12, 12).Parent = panel
 
-	local title = createLabel(theme, "Config Center", theme.Text, UDim2.new(1, -28, 0, 18))
+	local title = createLabel(theme, self.SettingsTitle, theme.Text, UDim2.new(1, -36, 0, 18))
 	title.Font = Enum.Font.GothamBold
 	title.TextSize = 15
 	title.ZIndex = 31
 	title.Parent = panel
+	self.SettingsTitleLabel = title
+	self:_track("TextObjects", title, "TextColor3")
 
 	local close = makeButton(theme, "X", UDim2.fromOffset(24, 24))
 	close.AnchorPoint = Vector2.new(1, 0)
 	close.Position = UDim2.new(1, 0, 0, 0)
 	close.ZIndex = 31
 	close.Parent = panel
+	table.insert(self.ButtonObjects, close)
 
-	local sub = createLabel(theme, "save, load and set autoload", theme.Muted, UDim2.new(1, 0, 0, 16))
+	local sub = createLabel(theme, self.SettingsSubtitle, theme.Muted, UDim2.new(1, 0, 0, 16))
 	sub.Position = UDim2.fromOffset(0, 18)
 	sub.TextSize = 11
 	sub.ZIndex = 31
 	sub.Parent = panel
+	self.SettingsSubtitleLabel = sub
+	self:_track("MutedTextObjects", sub, "TextColor3")
+
+	local appearanceLabel = createLabel(theme, "Accent", theme.Muted, UDim2.new(1, 0, 0, 16))
+	appearanceLabel.Position = UDim2.fromOffset(0, 42)
+	appearanceLabel.TextSize = 11
+	appearanceLabel.ZIndex = 31
+	appearanceLabel.Parent = panel
+	self:_track("MutedTextObjects", appearanceLabel, "TextColor3")
+
+	local accentRow = create("Frame", {
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(0, 62),
+		Size = UDim2.new(1, 0, 0, 30),
+		ZIndex = 31,
+		Parent = panel,
+	})
+
+	create("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		Padding = UDim.new(0, 6),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = accentRow,
+	})
+
+	for name, color in pairs(ACCENT_PRESETS) do
+		local accentButton = makeButton(theme, name, UDim2.fromOffset(53, 30))
+		accentButton.Parent = accentRow
+		table.insert(self.ButtonObjects, accentButton)
+		accentButton.MouseButton1Click:Connect(function()
+			self:SetAccentColor(color)
+			self:Notify({
+				Title = "Theme",
+				Content = string.format("%s accent applied", name),
+			})
+		end)
+	end
 
 	local input = create("TextBox", {
 		BackgroundColor3 = theme.SurfaceAlt,
@@ -544,7 +695,7 @@ function Window:_createConfigPanel()
 		Font = Enum.Font.Gotham,
 		PlaceholderColor3 = theme.Muted,
 		PlaceholderText = "config name",
-		Position = UDim2.fromOffset(0, 46),
+		Position = UDim2.fromOffset(0, 104),
 		Size = UDim2.new(1, 0, 0, 36),
 		Text = self.ConfigName,
 		TextColor3 = theme.Text,
@@ -552,47 +703,55 @@ function Window:_createConfigPanel()
 		ZIndex = 31,
 		Parent = panel,
 	})
+	self:_track("SurfaceAltObjects", input, "BackgroundColor3")
+	self:_track("TextObjects", input, "TextColor3")
+	self:_track("MutedTextObjects", input, "PlaceholderColor3")
 	corner(8).Parent = input
-	stroke(theme.Stroke, 1, 0.15).Parent = input
+	self:_track("StrokeObjects", stroke(theme.Stroke, 1, 0.15), "Color").Parent = input
 	padding(0, 12, 0, 12).Parent = input
 
 	local buttonRow = create("Frame", {
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(0, 92),
+		Position = UDim2.fromOffset(0, 150),
 		Size = UDim2.new(1, 0, 0, 34),
 		ZIndex = 31,
 		Parent = panel,
 	})
 
-	local rowLayout = create("UIListLayout", {
+	create("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal,
 		Padding = UDim.new(0, 8),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Parent = buttonRow,
 	})
 
-	local save = makeButton(theme, "Save", UDim2.new(0.34, 0, 1, 0))
-	local load = makeButton(theme, "Load", UDim2.new(0.33, 0, 1, 0))
-	local refresh = makeButton(theme, "Refresh", UDim2.new(0.33, 0, 1, 0))
+	local save = makeButton(theme, "Save", UDim2.fromOffset(94, 34))
+	local load = makeButton(theme, "Load", UDim2.fromOffset(94, 34))
+	local refresh = makeButton(theme, "Refresh", UDim2.fromOffset(94, 34))
 	save.Parent = buttonRow
 	load.Parent = buttonRow
 	refresh.Parent = buttonRow
+	table.insert(self.ButtonObjects, save)
+	table.insert(self.ButtonObjects, load)
+	table.insert(self.ButtonObjects, refresh)
 
 	local autoRow = create("Frame", {
 		BackgroundColor3 = theme.SurfaceAlt,
 		BorderSizePixel = 0,
-		Position = UDim2.fromOffset(0, 136),
+		Position = UDim2.fromOffset(0, 194),
 		Size = UDim2.new(1, 0, 0, 42),
 		ZIndex = 31,
 		Parent = panel,
 	})
+	self:_track("SurfaceAltObjects", autoRow, "BackgroundColor3")
 	corner(8).Parent = autoRow
-	stroke(theme.Stroke, 1, 0.15).Parent = autoRow
+	self:_track("StrokeObjects", stroke(theme.Stroke, 1, 0.15), "Color").Parent = autoRow
 
 	local autoLabel = createLabel(theme, "Autoload this config", theme.Text, UDim2.new(1, -60, 1, 0))
 	autoLabel.Position = UDim2.fromOffset(12, 0)
 	autoLabel.ZIndex = 31
 	autoLabel.Parent = autoRow
+	self:_track("TextObjects", autoLabel, "TextColor3")
 
 	local autoToggle = create("TextButton", {
 		AnchorPoint = Vector2.new(1, 0.5),
@@ -605,6 +764,7 @@ function Window:_createConfigPanel()
 		ZIndex = 31,
 		Parent = autoRow,
 	})
+	self:_track("BackgroundObjects", autoToggle, "BackgroundColor3")
 	corner(10).Parent = autoToggle
 
 	local autoKnob = create("Frame", {
@@ -616,6 +776,7 @@ function Window:_createConfigPanel()
 		ZIndex = 32,
 		Parent = autoToggle,
 	})
+	self:_track("TextObjects", autoKnob, "BackgroundColor3")
 	corner(8).Parent = autoKnob
 
 	local listFrame = create("ScrollingFrame", {
@@ -624,13 +785,15 @@ function Window:_createConfigPanel()
 		BackgroundColor3 = theme.Background,
 		BorderSizePixel = 0,
 		CanvasSize = UDim2.new(),
-		Position = UDim2.fromOffset(0, 188),
+		Position = UDim2.fromOffset(0, 246),
 		ScrollBarImageColor3 = theme.Accent,
 		ScrollBarThickness = 3,
-		Size = UDim2.new(1, 0, 1, -188),
+		Size = UDim2.new(1, 0, 1, -292),
 		ZIndex = 31,
 		Parent = panel,
 	})
+	self:_track("BackgroundObjects", listFrame, "BackgroundColor3")
+	self:_track("AccentObjects", listFrame, "ScrollBarImageColor3")
 	corner(8).Parent = listFrame
 	padding(8, 8, 8, 8).Parent = listFrame
 	create("UIListLayout", {
@@ -639,12 +802,16 @@ function Window:_createConfigPanel()
 		Parent = listFrame,
 	})
 
+	local unload = makeButton(theme, "Unload", UDim2.new(1, 0, 0, 34))
+	unload.Position = UDim2.new(0, 0, 1, -34)
+	unload.ZIndex = 31
+	unload.Parent = panel
+	table.insert(self.ButtonObjects, unload)
+
 	local function syncAutoToggle()
 		local meta = self.ConfigStore:getMeta()
 		local active = meta.autoload == self.ConfigName
-		TweenService:Create(autoToggle, TweenInfo.new(0.15), {
-			BackgroundColor3 = active and theme.Accent or theme.Background,
-		}):Play()
+		autoToggle.BackgroundColor3 = active and theme.Accent or theme.Background
 		TweenService:Create(autoKnob, TweenInfo.new(0.15), {
 			Position = active and UDim2.new(1, -18, 0.5, 0) or UDim2.fromOffset(2, 10),
 		}):Play()
@@ -669,18 +836,20 @@ function Window:_createConfigPanel()
 				Parent = listFrame,
 			})
 			corner(8).Parent = item
-			stroke(theme.Stroke, 1, 0.15).Parent = item
+			self:_track("StrokeObjects", stroke(theme.Stroke, 1, 0.15), "Color").Parent = item
 
 			local label = createLabel(theme, name, theme.Text, UDim2.new(1, -82, 1, 0))
 			label.Position = UDim2.fromOffset(12, 0)
 			label.ZIndex = 32
 			label.Parent = item
+			self:_track("TextObjects", label, "TextColor3")
 
 			local useButton = makeButton(theme, "Use", UDim2.fromOffset(56, 24))
 			useButton.AnchorPoint = Vector2.new(1, 0.5)
 			useButton.Position = UDim2.new(1, -8, 0.5, 0)
 			useButton.ZIndex = 32
 			useButton.Parent = item
+			table.insert(self.ButtonObjects, useButton)
 
 			useButton.MouseButton1Click:Connect(function()
 				input.Text = name
@@ -714,6 +883,9 @@ function Window:_createConfigPanel()
 	end)
 
 	refresh.MouseButton1Click:Connect(refreshConfigList)
+	unload.MouseButton1Click:Connect(function()
+		self:Destroy()
+	end)
 
 	autoToggle.MouseButton1Click:Connect(function()
 		self.ConfigName = input.Text ~= "" and input.Text or self.ConfigName
@@ -840,18 +1012,21 @@ function Window:Notify(options)
 		Size = UDim2.fromOffset(250, 60),
 		Parent = self.NotificationHolder,
 	})
+	self:_track("SurfaceObjects", item, "BackgroundColor3")
 	corner(10).Parent = item
-	stroke(theme.Stroke, 1, 0.1).Parent = item
+	self:_track("StrokeObjects", stroke(theme.Stroke, 1, 0.1), "Color").Parent = item
 	padding(10, 12, 10, 12).Parent = item
 
 	local title = createLabel(theme, options.Title or "Notification", theme.Text, UDim2.new(1, 0, 0, 18))
 	title.Font = Enum.Font.GothamBold
 	title.Parent = item
+	self:_track("TextObjects", title, "TextColor3")
 
 	local message = createLabel(theme, options.Content or "", theme.Muted, UDim2.new(1, 0, 0, 16))
 	message.Position = UDim2.fromOffset(0, 20)
 	message.TextSize = 11
 	message.Parent = item
+	self:_track("MutedTextObjects", message, "TextColor3")
 
 	item.BackgroundTransparency = 1
 	TweenService:Create(item, TweenInfo.new(0.18), {BackgroundTransparency = 0}):Play()
@@ -883,6 +1058,8 @@ function Window:AddTab(options)
 		TextSize = 13,
 		Parent = self.Sidebar,
 	})
+	self:_track("BackgroundObjects", button, "BackgroundColor3")
+	self:_track("MutedTextObjects", button, "TextColor3")
 	corner(8).Parent = button
 
 	local page = create("ScrollingFrame", {
@@ -912,19 +1089,16 @@ function Window:AddTab(options)
 	}, Tab)
 
 	local function selectTab()
+		self.SelectedTab = tab
 		for _, other in ipairs(self.Tabs) do
 			other.Page.Visible = false
-			TweenService:Create(other.Button, TweenInfo.new(0.12), {
-				BackgroundColor3 = theme.Background,
-				TextColor3 = theme.Muted,
-			}):Play()
+			other.Button.BackgroundColor3 = theme.Background
+			other.Button.TextColor3 = theme.Muted
 		end
 
 		page.Visible = true
-		TweenService:Create(button, TweenInfo.new(0.12), {
-			BackgroundColor3 = theme.Accent,
-			TextColor3 = Color3.fromRGB(255, 255, 255),
-		}):Play()
+		button.BackgroundColor3 = theme.Accent
+		button.TextColor3 = Color3.fromRGB(255, 255, 255)
 	end
 
 	button.MouseButton1Click:Connect(selectTab)
@@ -946,13 +1120,15 @@ function Tab:AddSection(title)
 		Size = UDim2.new(1, 0, 0, 0),
 		Parent = self.Page,
 	})
+	self.Window:_track("SurfaceAltObjects", frame, "BackgroundColor3")
 	corner(10).Parent = frame
-	stroke(theme.Stroke, 1, 0.1).Parent = frame
+	self.Window:_track("StrokeObjects", stroke(theme.Stroke, 1, 0.1), "Color").Parent = frame
 	padding(12, 12, 12, 12).Parent = frame
 
 	local heading = createLabel(theme, title or "Section", theme.Text, UDim2.new(1, 0, 0, 18))
 	heading.Font = Enum.Font.GothamBold
 	heading.Parent = frame
+	self.Window:_track("TextObjects", heading, "TextColor3")
 
 	local list = create("UIListLayout", {
 		Padding = UDim.new(0, 10),
@@ -986,6 +1162,7 @@ end
 function Section:AddLabel(text)
 	local label = createLabel(self.Window.Theme, text, self.Window.Theme.Muted, UDim2.new(1, 0, 0, 18))
 	label.Parent = self.Frame
+	self.Window:_track("MutedTextObjects", label, "TextColor3")
 	return label
 end
 
@@ -993,6 +1170,7 @@ function Section:AddButton(options)
 	options = options or {}
 	local button = makeButton(self.Window.Theme, options.Title or "Button")
 	button.Parent = self.Frame
+	table.insert(self.Window.ButtonObjects, button)
 	button.MouseButton1Click:Connect(function()
 		if options.Callback then
 			task.spawn(options.Callback)
@@ -1010,11 +1188,13 @@ function Section:AddToggle(options)
 		Size = UDim2.new(1, 0, 0, 44),
 		Parent = self.Frame,
 	})
+	self.Window:_track("BackgroundObjects", frame, "BackgroundColor3")
 	corner(8).Parent = frame
 
 	local label = createLabel(theme, options.Title or options.Id or "Toggle", theme.Text, UDim2.new(1, -64, 1, 0))
 	label.Position = UDim2.fromOffset(12, 0)
 	label.Parent = frame
+	self.Window:_track("TextObjects", label, "TextColor3")
 
 	local switch = create("TextButton", {
 		AnchorPoint = Vector2.new(1, 0.5),
@@ -1026,8 +1206,9 @@ function Section:AddToggle(options)
 		Text = "",
 		Parent = frame,
 	})
+	self.Window:_track("BackgroundObjects", switch, "BackgroundColor3")
 	corner(11).Parent = switch
-	stroke(theme.Stroke, 1, 0.15).Parent = switch
+	self.Window:_track("StrokeObjects", stroke(theme.Stroke, 1, 0.15), "Color").Parent = switch
 
 	local knob = create("Frame", {
 		AnchorPoint = Vector2.new(0, 0.5),
@@ -1037,6 +1218,7 @@ function Section:AddToggle(options)
 		Size = UDim2.fromOffset(16, 16),
 		Parent = switch,
 	})
+	self.Window:_track("TextObjects", knob, "BackgroundColor3")
 	corner(8).Parent = knob
 
 	local id = options.Id or options.Title
@@ -1077,17 +1259,20 @@ function Section:AddSlider(options)
 		Size = UDim2.new(1, 0, 0, 58),
 		Parent = self.Frame,
 	})
+	self.Window:_track("BackgroundObjects", frame, "BackgroundColor3")
 	corner(8).Parent = frame
 	padding(10, 12, 10, 12).Parent = frame
 
 	local label = createLabel(theme, options.Title or options.Id or "Slider", theme.Text, UDim2.new(1, -60, 0, 16))
 	label.Parent = frame
+	self.Window:_track("TextObjects", label, "TextColor3")
 
 	local valueLabel = createLabel(theme, "", theme.Muted, UDim2.fromOffset(48, 16))
 	valueLabel.AnchorPoint = Vector2.new(1, 0)
 	valueLabel.Position = UDim2.new(1, 0, 0, 0)
 	valueLabel.TextXAlignment = Enum.TextXAlignment.Right
 	valueLabel.Parent = frame
+	self.Window:_track("MutedTextObjects", valueLabel, "TextColor3")
 
 	local bar = create("Frame", {
 		BackgroundColor3 = theme.SurfaceAlt,
@@ -1096,6 +1281,7 @@ function Section:AddSlider(options)
 		Size = UDim2.new(1, -24, 0, 8),
 		Parent = frame,
 	})
+	self.Window:_track("SurfaceAltObjects", bar, "BackgroundColor3")
 	corner(4).Parent = bar
 
 	local fill = create("Frame", {
@@ -1104,6 +1290,7 @@ function Section:AddSlider(options)
 		Size = UDim2.fromScale(0, 1),
 		Parent = bar,
 	})
+	self.Window:_track("AccentObjects", fill, "BackgroundColor3")
 	corner(4).Parent = fill
 
 	local hitbox = create("TextButton", {
@@ -1168,12 +1355,14 @@ function Section:AddInput(options)
 		Size = UDim2.new(1, 0, 0, 72),
 		Parent = self.Frame,
 	})
+	self.Window:_track("BackgroundObjects", frame, "BackgroundColor3")
 	corner(8).Parent = frame
 	padding(10, 12, 10, 12).Parent = frame
 
 	local id = options.Id or options.Title
 	local label = createLabel(theme, options.Title or id or "Input", theme.Text, UDim2.new(1, 0, 0, 16))
 	label.Parent = frame
+	self.Window:_track("TextObjects", label, "TextColor3")
 
 	local box = create("TextBox", {
 		BackgroundColor3 = theme.SurfaceAlt,
@@ -1189,8 +1378,11 @@ function Section:AddInput(options)
 		TextSize = 13,
 		Parent = frame,
 	})
+	self.Window:_track("SurfaceAltObjects", box, "BackgroundColor3")
+	self.Window:_track("TextObjects", box, "TextColor3")
+	self.Window:_track("MutedTextObjects", box, "PlaceholderColor3")
 	corner(8).Parent = box
-	stroke(theme.Stroke, 1, 0.15).Parent = box
+	self.Window:_track("StrokeObjects", stroke(theme.Stroke, 1, 0.15), "Color").Parent = box
 	padding(0, 10, 0, 10).Parent = box
 
 	box.FocusLost:Connect(function()
@@ -1224,11 +1416,13 @@ function Section:AddDropdown(options)
 		Size = UDim2.new(1, 0, 0, 0),
 		Parent = self.Frame,
 	})
+	self.Window:_track("BackgroundObjects", frame, "BackgroundColor3")
 	corner(8).Parent = frame
 	padding(10, 12, 10, 12).Parent = frame
 
 	local label = createLabel(theme, options.Title or id or "Dropdown", theme.Text, UDim2.new(1, 0, 0, 16))
 	label.Parent = frame
+	self.Window:_track("TextObjects", label, "TextColor3")
 
 	local current = create("TextButton", {
 		AutoButtonColor = false,
@@ -1242,8 +1436,10 @@ function Section:AddDropdown(options)
 		Font = Enum.Font.Gotham,
 		Parent = frame,
 	})
+	self.Window:_track("SurfaceAltObjects", current, "BackgroundColor3")
+	self.Window:_track("TextObjects", current, "TextColor3")
 	corner(8).Parent = current
-	stroke(theme.Stroke, 1, 0.15).Parent = current
+	self.Window:_track("StrokeObjects", stroke(theme.Stroke, 1, 0.15), "Color").Parent = current
 
 	local list = create("Frame", {
 		AutomaticSize = Enum.AutomaticSize.Y,
@@ -1264,6 +1460,7 @@ function Section:AddDropdown(options)
 	for _, value in ipairs(values) do
 		local item = makeButton(theme, tostring(value), UDim2.new(1, 0, 0, 28))
 		item.Parent = list
+		table.insert(self.Window.ButtonObjects, item)
 		item.MouseButton1Click:Connect(function()
 			self.Window:SetValue(id, value)
 			opened = false
@@ -1294,7 +1491,9 @@ function Window:Destroy()
 	for _, connection in ipairs(self._connections) do
 		connection:Disconnect()
 	end
-	self.Gui:Destroy()
+	if self.Gui and self.Gui.Parent then
+		self.Gui:Destroy()
+	end
 end
 
 return ZenithUI

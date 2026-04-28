@@ -1,14 +1,18 @@
 local ZenithUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/oxp7331-web/zenith-ui/main/src/ZenithUI.lua"))()
 
 local Window = ZenithUI.new({
-	Title = "Zenith UI",
-	Subtitle = "minimalist runtime panel",
+	Title = "Aether Hub",
+	Subtitle = "combat and visuals",
+	SidebarTitle = "workspace",
+	SettingsTitle = "Settings",
+	SettingsSubtitle = "theme, config and session controls",
+	SettingsButtonText = "Settings",
 	ConfigFolder = "ZenithUI",
 	ToggleKey = Enum.KeyCode.RightShift,
 })
 
 local MainTab = Window:AddTab({
-	Title = "Main",
+	Title = "Ana Sayfa",
 })
 
 local Combat = MainTab:AddSection("Combat")
@@ -33,7 +37,7 @@ Combat:AddSlider({
 })
 
 local VisualsTab = Window:AddTab({
-	Title = "Visuals",
+	Title = "Grafikler",
 })
 
 local Visuals = VisualsTab:AddSection("Visuals")
