@@ -325,6 +325,7 @@ function ZenithUI.new(options)
 	self.ToggleKey = options.ToggleKey or Enum.KeyCode.RightShift
 	self.ConfigRoot = options.ConfigFolder or "ZenithUI"
 	self.ConfigName = options.DefaultConfig or "default"
+	self.ActiveConfigName = nil
 	self.SelectedTab = nil
 	self.Flags = {}
 	self.Controls = {}
@@ -403,6 +404,9 @@ end
 function Window:SetAccentColor(color)
 	self.Theme.Accent = color
 	self:_refreshTheme()
+	if self._refreshConfigs then
+		self._refreshConfigs()
+	end
 end
 
 function Window:SetTitle(text)
@@ -437,6 +441,14 @@ function Window:SetSettingsSubtitle(text)
 	self.SettingsSubtitle = text
 	if self.SettingsSubtitleLabel then
 		self.SettingsSubtitleLabel.Text = text
+	end
+end
+
+function Window:SetActiveConfig(name)
+	self.ActiveConfigName = name
+	self.ConfigName = name or self.ConfigName
+	if self._refreshConfigs then
+		self._refreshConfigs()
 	end
 end
 
@@ -641,7 +653,7 @@ function Window:_createConfigPanel()
 		BackgroundColor3 = theme.Surface,
 		BorderSizePixel = 0,
 		Position = UDim2.fromOffset(216, 66),
-		Size = UDim2.fromOffset(326, 392),
+		Size = UDim2.fromOffset(326, 446),
 		Visible = false,
 		ZIndex = 30,
 		Parent = self.Root,
@@ -752,11 +764,33 @@ function Window:_createConfigPanel()
 	table.insert(self.ButtonObjects, load)
 	table.insert(self.ButtonObjects, refresh)
 
+	local searchBox = create("TextBox", {
+		BackgroundColor3 = theme.SurfaceAlt,
+		BorderSizePixel = 0,
+		ClearTextOnFocus = false,
+		Font = Enum.Font.Gotham,
+		PlaceholderColor3 = theme.Muted,
+		PlaceholderText = "Config ara...",
+		Position = UDim2.fromOffset(0, 222),
+		Size = UDim2.new(1, 0, 0, 34),
+		Text = "",
+		TextColor3 = theme.Text,
+		TextSize = 13,
+		ZIndex = 31,
+		Parent = panel,
+	})
+	self:_track("SurfaceAltObjects", searchBox, "BackgroundColor3")
+	self:_track("TextObjects", searchBox, "TextColor3")
+	self:_track("MutedTextObjects", searchBox, "PlaceholderColor3")
+	corner(8).Parent = searchBox
+	self:_track("StrokeObjects", stroke(theme.Stroke, 1, 0.15), "Color").Parent = searchBox
+	padding(0, 12, 0, 12).Parent = searchBox
+
 	local autoRow = create("Frame", {
 		BackgroundColor3 = theme.SurfaceAlt,
 		BorderSizePixel = 0,
-		Position = UDim2.fromOffset(0, 222),
-		Size = UDim2.new(1, 0, 0, 42),
+		Position = UDim2.fromOffset(0, 264),
+		Size = UDim2.new(1, 0, 0, 96),
 		ZIndex = 31,
 		Parent = panel,
 	})
@@ -802,10 +836,10 @@ function Window:_createConfigPanel()
 		BackgroundColor3 = theme.Background,
 		BorderSizePixel = 0,
 		CanvasSize = UDim2.new(),
-		Position = UDim2.fromOffset(0, 274),
+		Position = UDim2.fromOffset(0, 316),
 		ScrollBarImageColor3 = theme.Accent,
-		ScrollBarThickness = 3,
-		Size = UDim2.new(1, 0, 0, 70),
+		ScrollBarThickness = 4,
+		Size = UDim2.new(1, 0, 0, 42),
 		ZIndex = 31,
 		Parent = panel,
 	})
@@ -820,10 +854,59 @@ function Window:_createConfigPanel()
 	})
 
 	local unload = makeButton(theme, "Unload", UDim2.new(1, 0, 0, 34))
-	unload.Position = UDim2.fromOffset(0, 352)
+	unload.Position = UDim2.fromOffset(0, 406)
 	unload.ZIndex = 31
 	unload.Parent = panel
 	table.insert(self.ButtonObjects, unload)
+
+	local confirmRow = create("Frame", {
+		BackgroundColor3 = theme.SurfaceAlt,
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(0, 406),
+		Size = UDim2.new(1, 0, 0, 34),
+		Visible = false,
+		ZIndex = 32,
+		Parent = panel,
+	})
+	self:_track("SurfaceAltObjects", confirmRow, "BackgroundColor3")
+	corner(8).Parent = confirmRow
+	self:_track("StrokeObjects", stroke(theme.Stroke, 1, 0.15), "Color").Parent = confirmRow
+
+	local confirmLabel = createLabel(theme, "", theme.Text, UDim2.new(1, -124, 1, 0))
+	confirmLabel.Position = UDim2.fromOffset(10, 0)
+	confirmLabel.ZIndex = 33
+	confirmLabel.TextSize = 11
+	confirmLabel.Parent = confirmRow
+	self:_track("TextObjects", confirmLabel, "TextColor3")
+
+	local confirmYes = makeButton(theme, "Evet", UDim2.fromOffset(54, 24))
+	confirmYes.AnchorPoint = Vector2.new(1, 0.5)
+	confirmYes.Position = UDim2.new(1, -62, 0.5, 0)
+	confirmYes.ZIndex = 33
+	confirmYes.Parent = confirmRow
+	table.insert(self.ButtonObjects, confirmYes)
+
+	local confirmNo = makeButton(theme, "Vazgec", UDim2.fromOffset(54, 24))
+	confirmNo.AnchorPoint = Vector2.new(1, 0.5)
+	confirmNo.Position = UDim2.new(1, -4, 0.5, 0)
+	confirmNo.ZIndex = 33
+	confirmNo.Parent = confirmRow
+	table.insert(self.ButtonObjects, confirmNo)
+
+	local pendingConfirmAction = nil
+
+	local function hideConfirm()
+		pendingConfirmAction = nil
+		confirmRow.Visible = false
+		unload.Visible = true
+	end
+
+	local function showConfirm(message, callback)
+		pendingConfirmAction = callback
+		confirmLabel.Text = message
+		confirmRow.Visible = true
+		unload.Visible = false
+	end
 
 	local function syncAutoToggle()
 		local meta = self.ConfigStore:getMeta()
@@ -845,11 +928,14 @@ function Window:_createConfigPanel()
 		self.ConfigName = input.Text ~= "" and input.Text or self.ConfigName
 		syncAutoToggle()
 
+		local query = string.lower(searchBox.Text or "")
+
 		for _, name in ipairs(self.ConfigStore:list()) do
+			if query == "" or string.find(string.lower(name), query, 1, true) then
 			local item = create("Frame", {
 				BackgroundColor3 = theme.SurfaceAlt,
 				BorderSizePixel = 0,
-				Size = UDim2.new(1, 0, 0, 34),
+				Size = UDim2.new(1, 0, 0, 66),
 				ZIndex = 31,
 				Parent = listFrame,
 			})
@@ -857,28 +943,135 @@ function Window:_createConfigPanel()
 			corner(8).Parent = item
 			self:_track("StrokeObjects", stroke(theme.Stroke, 1, 0.15), "Color").Parent = item
 
-			local label = createLabel(theme, name, theme.Text, UDim2.new(1, -82, 1, 0))
-			label.Position = UDim2.fromOffset(12, 0)
+			local activeAccent = create("Frame", {
+				BackgroundColor3 = self.ActiveConfigName == name and theme.Accent or theme.SurfaceAlt,
+				BorderSizePixel = 0,
+				Position = UDim2.fromOffset(0, 0),
+				Size = UDim2.fromOffset(4, 66),
+				ZIndex = 32,
+				Parent = item,
+			})
+
+			local label = createLabel(theme, name, self.ActiveConfigName == name and theme.Text or theme.Text, UDim2.new(1, -164, 0, 18))
+			label.Position = UDim2.fromOffset(14, 8)
 			label.ZIndex = 32
+			label.Font = self.ActiveConfigName == name and Enum.Font.GothamBold or Enum.Font.Gotham
 			label.Parent = item
 			self:_track("TextObjects", label, "TextColor3")
 
-			local useButton = makeButton(theme, "Use", UDim2.fromOffset(56, 24))
-			useButton.AnchorPoint = Vector2.new(1, 0.5)
-			useButton.Position = UDim2.new(1, -8, 0.5, 0)
-			useButton.ZIndex = 32
-			useButton.Parent = item
-			table.insert(self.ButtonObjects, useButton)
+			local status = createLabel(theme, self.ActiveConfigName == name and "Yuklu" or "-", self.ActiveConfigName == name and theme.Accent or theme.Muted, UDim2.fromOffset(72, 16))
+			status.Position = UDim2.new(1, -154, 0, 10)
+			status.TextXAlignment = Enum.TextXAlignment.Right
+			status.ZIndex = 32
+			status.Parent = item
+			self:_track(self.ActiveConfigName == name and "AccentObjects" or "MutedTextObjects", status, "TextColor3")
 
-			useButton.MouseButton1Click:Connect(function()
+			local meta = self.ConfigStore:getMeta()
+			local rowAuto = create("TextButton", {
+				AnchorPoint = Vector2.new(1, 0),
+				AutoButtonColor = false,
+				BackgroundColor3 = meta.autoload == name and theme.Accent or theme.Background,
+				BorderSizePixel = 0,
+				Position = UDim2.new(1, -106, 0, 34),
+				Size = UDim2.fromOffset(34, 18),
+				Text = "",
+				ZIndex = 32,
+				Parent = item,
+			})
+			corner(9).Parent = rowAuto
+
+			local rowKnob = create("Frame", {
+				AnchorPoint = Vector2.new(0, 0.5),
+				BackgroundColor3 = theme.Text,
+				BorderSizePixel = 0,
+				Position = meta.autoload == name and UDim2.new(1, -16, 0.5, 0) or UDim2.fromOffset(2, 9),
+				Size = UDim2.fromOffset(14, 14),
+				ZIndex = 33,
+				Parent = rowAuto,
+			})
+			corner(7).Parent = rowKnob
+
+			local autoText = createLabel(theme, "Autoload", theme.Muted, UDim2.fromOffset(64, 16))
+			autoText.Position = UDim2.new(1, -174, 0, 35)
+			autoText.TextSize = 10
+			autoText.ZIndex = 32
+			autoText.Parent = item
+			self:_track("MutedTextObjects", autoText, "TextColor3")
+
+			local loadButton = makeButton(theme, "Use", UDim2.fromOffset(56, 24))
+			loadButton.AnchorPoint = Vector2.new(1, 0)
+			loadButton.Position = UDim2.new(1, -8, 0, 8)
+			loadButton.ZIndex = 32
+			loadButton.Parent = item
+			table.insert(self.ButtonObjects, loadButton)
+
+			local overwriteButton = makeButton(theme, "Yaz", UDim2.fromOffset(42, 20))
+			overwriteButton.AnchorPoint = Vector2.new(1, 0)
+			overwriteButton.Position = UDim2.new(1, -56, 0, 38)
+			overwriteButton.ZIndex = 32
+			overwriteButton.TextSize = 11
+			overwriteButton.Parent = item
+			table.insert(self.ButtonObjects, overwriteButton)
+
+			local deleteButton = makeButton(theme, "Sil", UDim2.fromOffset(42, 20))
+			deleteButton.AnchorPoint = Vector2.new(1, 0)
+			deleteButton.Position = UDim2.new(1, -8, 0, 38)
+			deleteButton.ZIndex = 32
+			deleteButton.TextSize = 11
+			deleteButton.Parent = item
+			table.insert(self.ButtonObjects, deleteButton)
+
+			loadButton.MouseButton1Click:Connect(function()
 				input.Text = name
 				self.ConfigName = name
+				self:LoadConfig(name)
 				syncAutoToggle()
 			end)
+
+			rowAuto.MouseButton1Click:Connect(function()
+				local rowMeta = self.ConfigStore:getMeta()
+				rowMeta.autoload = rowMeta.autoload == name and nil or name
+				self.ConfigStore:setMeta(rowMeta)
+				if name == self.ConfigName then
+					syncAutoToggle()
+				end
+				refreshConfigList()
+			end)
+
+			overwriteButton.MouseButton1Click:Connect(function()
+				showConfirm(string.format("%s uzerine yazilsin?", name), function()
+					self:SaveConfig(name)
+					input.Text = name
+					refreshConfigList()
+					hideConfirm()
+				end)
+			end)
+
+			deleteButton.MouseButton1Click:Connect(function()
+				showConfirm(string.format("%s silinsin?", name), function()
+					local metaState = self.ConfigStore:getMeta()
+					if metaState.autoload == name then
+						metaState.autoload = nil
+						self.ConfigStore:setMeta(metaState)
+					end
+					self.ConfigStore:delete(name)
+					if self.ActiveConfigName == name then
+						self.ActiveConfigName = nil
+					end
+					if self.ConfigName == name then
+						self.ConfigName = "default"
+						input.Text = self.ConfigName
+					end
+					refreshConfigList()
+					hideConfirm()
+				end)
+			end)
+			end
 		end
 	end
 
 	close.MouseButton1Click:Connect(function()
+		hideConfirm()
 		self:SetConfigMenuVisible(false)
 	end)
 
@@ -905,6 +1098,13 @@ function Window:_createConfigPanel()
 	unload.MouseButton1Click:Connect(function()
 		self:Destroy()
 	end)
+	searchBox:GetPropertyChangedSignal("Text"):Connect(refreshConfigList)
+	confirmYes.MouseButton1Click:Connect(function()
+		if pendingConfirmAction then
+			pendingConfirmAction()
+		end
+	end)
+	confirmNo.MouseButton1Click:Connect(hideConfirm)
 
 	autoToggle.MouseButton1Click:Connect(function()
 		self.ConfigName = input.Text ~= "" and input.Text or self.ConfigName
@@ -985,6 +1185,7 @@ end
 function Window:SaveConfig(name)
 	name = name or self.ConfigName
 	self.ConfigStore:save(name, self:CollectConfig())
+	self:SetActiveConfig(name)
 end
 
 function Window:LoadConfig(name)
@@ -995,6 +1196,7 @@ function Window:LoadConfig(name)
 	end
 
 	self:ApplyConfig(payload)
+	self:SetActiveConfig(name)
 end
 
 function Window:TryAutoload()
