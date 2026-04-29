@@ -599,13 +599,17 @@ function Window:_refreshTheme()
 		if tab.Button and tab.Button.Parent then
 			if tab == self.SelectedTab then
 				tab.Button.BackgroundColor3 = self.Theme.SurfaceAlt
-				tab.Button.TextColor3 = self.Theme.Text
+				if tab.TitleLabel then
+					tab.TitleLabel.TextColor3 = self.Theme.Text
+				end
 				if tab.Indicator then
 					tab.Indicator.BackgroundTransparency = 0
 				end
 			else
 				tab.Button.BackgroundColor3 = self.Theme.Background
-				tab.Button.TextColor3 = self.Theme.Muted
+				if tab.TitleLabel then
+					tab.TitleLabel.TextColor3 = self.Theme.Muted
+				end
 				if tab.Indicator then
 					tab.Indicator.BackgroundTransparency = 1
 				end
@@ -2077,15 +2081,12 @@ function Window:AddTab(options)
 		BorderSizePixel = 0,
 		Font = Enum.Font.GothamMedium,
 		Size = UDim2.new(1, 0, 0, 36),
-		Text = options.Title or "Tab",
+		Text = "",
 		TextColor3 = theme.Muted,
 		TextSize = 13,
-		TextXAlignment = Enum.TextXAlignment.Left,
 		Parent = self.Sidebar,
 	})
-	padding(0, 12, 0, 18).Parent = button
 	self:_track("BackgroundObjects", button, "BackgroundColor3")
-	self:_track("MutedTextObjects", button, "TextColor3")
 	corner(8).Parent = button
 
 	local indicator = create("Frame", {
@@ -2099,6 +2100,19 @@ function Window:AddTab(options)
 	})
 	self:_track("AccentObjects", indicator, "BackgroundColor3")
 	corner(2).Parent = indicator
+
+	local titleLabel = create("TextLabel", {
+		BackgroundTransparency = 1,
+		Font = Enum.Font.GothamMedium,
+		Position = UDim2.fromOffset(18, 0),
+		Size = UDim2.new(1, -22, 1, 0),
+		Text = options.Title or "Tab",
+		TextColor3 = theme.Muted,
+		TextSize = 13,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = button,
+	})
+	self:_track("MutedTextObjects", titleLabel, "TextColor3")
 
 	local page = create("ScrollingFrame", {
 		Active = true,
@@ -2133,8 +2147,12 @@ function Window:AddTab(options)
 			if other ~= tab then
 				TweenService:Create(other.Button, TweenInfo.new(0.15), {
 					BackgroundColor3 = self.Theme.Background,
-					TextColor3 = self.Theme.Muted,
 				}):Play()
+				if other.TitleLabel then
+					TweenService:Create(other.TitleLabel, TweenInfo.new(0.15), {
+						TextColor3 = self.Theme.Muted,
+					}):Play()
+				end
 				if other.Indicator then
 					TweenService:Create(other.Indicator, TweenInfo.new(0.15), {
 						BackgroundTransparency = 1,
@@ -2146,6 +2164,8 @@ function Window:AddTab(options)
 		page.Visible = true
 		TweenService:Create(button, TweenInfo.new(0.15), {
 			BackgroundColor3 = self.Theme.SurfaceAlt,
+		}):Play()
+		TweenService:Create(titleLabel, TweenInfo.new(0.15), {
 			TextColor3 = self.Theme.Text,
 		}):Play()
 		TweenService:Create(indicator, TweenInfo.new(0.15), {
@@ -2158,7 +2178,7 @@ function Window:AddTab(options)
 
 	button.MouseEnter:Connect(function()
 		if self.SelectedTab ~= tab then
-			TweenService:Create(button, TweenInfo.new(0.12), {
+			TweenService:Create(titleLabel, TweenInfo.new(0.12), {
 				TextColor3 = self.Theme.Text,
 			}):Play()
 		end
@@ -2166,7 +2186,7 @@ function Window:AddTab(options)
 
 	button.MouseLeave:Connect(function()
 		if self.SelectedTab ~= tab then
-			TweenService:Create(button, TweenInfo.new(0.12), {
+			TweenService:Create(titleLabel, TweenInfo.new(0.12), {
 				TextColor3 = self.Theme.Muted,
 			}):Play()
 		end
@@ -2174,6 +2194,7 @@ function Window:AddTab(options)
 
 	button.MouseButton1Click:Connect(selectTab)
 
+	tab.TitleLabel = titleLabel
 	tab.Indicator = indicator
 	table.insert(self.Tabs, tab)
 	if #self.Tabs == 1 then
