@@ -10,6 +10,7 @@ Zenith UI is a standalone Roblox Lua UI library built for script hubs and person
 - Closable config menu
 - Built-in notifications
 - Single-file import flow
+- Per-key theme editor with hex code input, RGB sliders and numeric channel boxes
 
 ## Design direction
 
