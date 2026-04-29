@@ -117,6 +117,37 @@ local function color3ToRGB(color)
 	}
 end
 
+local function color3ToHex(color)
+	return string.format(
+		"#%02X%02X%02X",
+		clampByte(color.R * 255),
+		clampByte(color.G * 255),
+		clampByte(color.B * 255)
+	)
+end
+
+local function parseHexColor(text)
+	if type(text) ~= "string" then
+		return nil
+	end
+	local cleaned = text:gsub("#", ""):gsub("%s", "")
+	if #cleaned == 3 then
+		cleaned = cleaned:gsub(".", function(c)
+			return c .. c
+		end)
+	end
+	if #cleaned ~= 6 or not cleaned:match("^[%x][%x][%x][%x][%x][%x]$") then
+		return nil
+	end
+	local r = tonumber(cleaned:sub(1, 2), 16)
+	local g = tonumber(cleaned:sub(3, 4), 16)
+	local b = tonumber(cleaned:sub(5, 6), 16)
+	if not r or not g or not b then
+		return nil
+	end
+	return Color3.fromRGB(r, g, b)
+end
+
 local function rgbToColor3(payload, fallback)
 	if typeof(payload) == "Color3" then
 		return payload
@@ -1258,17 +1289,10 @@ function Window:_createConfigPanel()
 
 	local function refreshThemeEditors(targetKey)
 		syncingEditors = true
-		for key, channels in pairs(self._themeEditors) do
+		for key, editor in pairs(self._themeEditors) do
 			if not targetKey or targetKey == key then
 				local color = self.Theme[key] or DEFAULT_THEME[key]
-				local values = {
-					r = clampByte(color.R * 255),
-					g = clampByte(color.G * 255),
-					b = clampByte(color.B * 255),
-				}
-				for channel, editor in pairs(channels) do
-					editor.SetVisual(values[channel] or 0)
-				end
+				editor.update(color)
 			end
 		end
 		syncingEditors = false
@@ -1280,46 +1304,141 @@ function Window:_createConfigPanel()
 		local row = create("Frame", {
 			BackgroundColor3 = theme.SurfaceAlt,
 			BorderSizePixel = 0,
-			Size = UDim2.new(1, 0, 0, 76),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			Size = UDim2.new(1, 0, 0, 0),
 			ZIndex = 11,
 			Parent = editorFrame,
 		})
 		self:_track("SurfaceAltObjects", row, "BackgroundColor3")
 		corner(8).Parent = row
 		self:_track("StrokeObjects", stroke(theme.Stroke, 1, 0.15), "Color").Parent = row
-		padding(10, 10, 10, 10).Parent = row
+		padding(8, 10, 10, 10).Parent = row
+		create("UIListLayout", {
+			Padding = UDim.new(0, 8),
+			SortOrder = Enum.SortOrder.LayoutOrder,
+			Parent = row,
+		})
 
-		local rowLabel = createLabel(theme, key, theme.Text, UDim2.new(1, 0, 0, 16))
+		local header = create("Frame", {
+			BackgroundTransparency = 1,
+			Size = UDim2.new(1, 0, 0, 28),
+			LayoutOrder = 0,
+			ZIndex = 11,
+			Parent = row,
+		})
+
+		local swatchButton = create("TextButton", {
+			AutoButtonColor = false,
+			BackgroundColor3 = self.Theme[key] or DEFAULT_THEME[key],
+			BorderSizePixel = 0,
+			Position = UDim2.fromOffset(0, 4),
+			Size = UDim2.fromOffset(20, 20),
+			Text = "",
+			ZIndex = 12,
+			Parent = header,
+		})
+		corner(5).Parent = swatchButton
+		self:_track("StrokeObjects", stroke(theme.Stroke, 1, 0.3), "Color").Parent = swatchButton
+
+		local rowLabel = createLabel(theme, key, theme.Text, UDim2.new(1, -190, 0, 18))
+		rowLabel.Position = UDim2.fromOffset(28, 5)
 		rowLabel.Font = Enum.Font.GothamBold
+		rowLabel.TextSize = 12
 		rowLabel.ZIndex = 12
-		rowLabel.Parent = row
+		rowLabel.Parent = header
 		self:_track("TextObjects", rowLabel, "TextColor3")
 
-		local channels = {}
-		self._themeEditors[key] = channels
+		local hexInput = create("TextBox", {
+			AnchorPoint = Vector2.new(1, 0),
+			BackgroundColor3 = theme.Background,
+			BorderSizePixel = 0,
+			ClearTextOnFocus = false,
+			Font = Enum.Font.Code,
+			PlaceholderText = "#FFFFFF",
+			PlaceholderColor3 = theme.Muted,
+			Position = UDim2.new(1, -32, 0, 2),
+			Size = UDim2.fromOffset(112, 24),
+			Text = color3ToHex(self.Theme[key] or DEFAULT_THEME[key]),
+			TextColor3 = theme.Text,
+			TextSize = 12,
+			TextXAlignment = Enum.TextXAlignment.Center,
+			ZIndex = 12,
+			Parent = header,
+		})
+		corner(6).Parent = hexInput
+		self:_track("BackgroundObjects", hexInput, "BackgroundColor3")
+		self:_track("TextObjects", hexInput, "TextColor3")
+		self:_track("MutedTextObjects", hexInput, "PlaceholderColor3")
+		self:_track("StrokeObjects", stroke(theme.Stroke, 1, 0.3), "Color").Parent = hexInput
+		padding(0, 6, 0, 6).Parent = hexInput
+
+		local chevron = create("TextButton", {
+			AnchorPoint = Vector2.new(1, 0),
+			AutoButtonColor = false,
+			BackgroundColor3 = theme.Background,
+			BorderSizePixel = 0,
+			Font = Enum.Font.GothamBold,
+			Position = UDim2.new(1, 0, 0, 2),
+			Size = UDim2.fromOffset(24, 24),
+			Text = "+",
+			TextColor3 = theme.Muted,
+			TextSize = 16,
+			ZIndex = 12,
+			Parent = header,
+		})
+		corner(6).Parent = chevron
+		self:_track("BackgroundObjects", chevron, "BackgroundColor3")
+		self:_track("MutedTextObjects", chevron, "TextColor3")
+
+		local body = create("Frame", {
+			BackgroundTransparency = 1,
+			AutomaticSize = Enum.AutomaticSize.Y,
+			Size = UDim2.new(1, 0, 0, 0),
+			Visible = false,
+			LayoutOrder = 1,
+			ZIndex = 11,
+			Parent = row,
+		})
+		create("UIListLayout", {
+			Padding = UDim.new(0, 6),
+			SortOrder = Enum.SortOrder.LayoutOrder,
+			Parent = body,
+		})
+		padding(2, 2, 0, 2).Parent = body
+
 		local channelOrder = {
-			{ label = "R", name = "r", color = Color3.fromRGB(255, 96, 96), x = 0 },
-			{ label = "G", name = "g", color = Color3.fromRGB(104, 224, 148), x = 0.333 },
-			{ label = "B", name = "b", color = Color3.fromRGB(92, 166, 255), x = 0.666 },
+			{ label = "R", name = "r", color = Color3.fromRGB(255, 96, 96) },
+			{ label = "G", name = "g", color = Color3.fromRGB(104, 224, 148) },
+			{ label = "B", name = "b", color = Color3.fromRGB(92, 166, 255) },
 		}
 
-		for _, channelInfo in ipairs(channelOrder) do
-			local label = createLabel(theme, channelInfo.label, theme.Muted, UDim2.fromOffset(18, 14))
-			label.Position = UDim2.new(channelInfo.x, 0, 0, 24)
+		local channelSetters = {}
+
+		for index, channelInfo in ipairs(channelOrder) do
+			local channelRow = create("Frame", {
+				BackgroundTransparency = 1,
+				Size = UDim2.new(1, 0, 0, 22),
+				LayoutOrder = index,
+				ZIndex = 11,
+				Parent = body,
+			})
+
+			local label = createLabel(theme, channelInfo.label, theme.Muted, UDim2.fromOffset(14, 18))
+			label.Position = UDim2.fromOffset(0, 2)
 			label.ZIndex = 12
-			label.Parent = row
+			label.Parent = channelRow
 			self:_track("MutedTextObjects", label, "TextColor3")
 
 			local bar = create("Frame", {
 				BackgroundColor3 = theme.Background,
 				BorderSizePixel = 0,
-				Position = UDim2.new(channelInfo.x, 20, 0, 28),
-				Size = UDim2.new(0.29, -34, 0, 8),
+				Position = UDim2.fromOffset(20, 8),
+				Size = UDim2.new(1, -76, 0, 6),
 				ZIndex = 12,
-				Parent = row,
+				Parent = channelRow,
 			})
 			self:_track("BackgroundObjects", bar, "BackgroundColor3")
-			corner(4).Parent = bar
+			corner(3).Parent = bar
 
 			local fill = create("Frame", {
 				BackgroundColor3 = channelInfo.color,
@@ -1328,23 +1447,36 @@ function Window:_createConfigPanel()
 				ZIndex = 13,
 				Parent = bar,
 			})
-			corner(4).Parent = fill
+			corner(3).Parent = fill
 
 			local hitbox = create("TextButton", {
 				BackgroundTransparency = 1,
-				Size = UDim2.new(1, 0, 1, 8),
+				Position = UDim2.fromOffset(0, -6),
+				Size = UDim2.new(1, 0, 1, 12),
 				Text = "",
 				ZIndex = 14,
 				Parent = bar,
 			})
 
-			local valueLabel = createLabel(theme, "0", theme.Text, UDim2.fromOffset(28, 14))
-			valueLabel.AnchorPoint = Vector2.new(1, 0)
-			valueLabel.Position = UDim2.new(channelInfo.x + 0.29, -4, 0, 22)
-			valueLabel.TextXAlignment = Enum.TextXAlignment.Right
-			valueLabel.ZIndex = 12
-			valueLabel.Parent = row
-			self:_track("TextObjects", valueLabel, "TextColor3")
+			local valueInput = create("TextBox", {
+				AnchorPoint = Vector2.new(1, 0),
+				BackgroundColor3 = theme.Background,
+				BorderSizePixel = 0,
+				ClearTextOnFocus = true,
+				Font = Enum.Font.Code,
+				Position = UDim2.new(1, 0, 0, 0),
+				Size = UDim2.fromOffset(48, 22),
+				Text = "0",
+				TextColor3 = theme.Text,
+				TextSize = 12,
+				TextXAlignment = Enum.TextXAlignment.Center,
+				ZIndex = 12,
+				Parent = channelRow,
+			})
+			corner(6).Parent = valueInput
+			self:_track("BackgroundObjects", valueInput, "BackgroundColor3")
+			self:_track("TextObjects", valueInput, "TextColor3")
+			self:_track("StrokeObjects", stroke(theme.Stroke, 1, 0.3), "Color").Parent = valueInput
 
 			local dragging = false
 
@@ -1381,16 +1513,49 @@ function Window:_createConfigPanel()
 				end
 			end)
 
-			local function setVisual(value)
+			valueInput.FocusLost:Connect(function()
+				local n = tonumber(valueInput.Text)
+				if n then
+					applyChannel(n)
+				else
+					refreshThemeEditors(key)
+				end
+			end)
+
+			channelSetters[channelInfo.name] = function(value)
 				local safeValue = clampByte(value)
 				fill.Size = UDim2.fromScale(safeValue / 255, 1)
-				valueLabel.Text = tostring(safeValue)
+				valueInput.Text = tostring(safeValue)
 			end
-
-			channels[channelInfo.name] = {
-				SetVisual = setVisual,
-			}
 		end
+
+		hexInput.FocusLost:Connect(function()
+			local parsed = parseHexColor(hexInput.Text)
+			if parsed then
+				self:SetThemeColor(key, parsed)
+			end
+			refreshThemeEditors(key)
+		end)
+
+		chevron.MouseButton1Click:Connect(function()
+			body.Visible = not body.Visible
+			chevron.Text = body.Visible and "-" or "+"
+		end)
+
+		swatchButton.MouseButton1Click:Connect(function()
+			body.Visible = not body.Visible
+			chevron.Text = body.Visible and "-" or "+"
+		end)
+
+		self._themeEditors[key] = {
+			update = function(color)
+				swatchButton.BackgroundColor3 = color
+				hexInput.Text = color3ToHex(color)
+				channelSetters.r(color.R * 255)
+				channelSetters.g(color.G * 255)
+				channelSetters.b(color.B * 255)
+			end,
+		}
 	end
 
 	local function refreshThemeList()
@@ -1586,7 +1751,11 @@ function Window:_createConfigPanel()
 
 			rowAuto.MouseButton1Click:Connect(function()
 				local rowMeta = self.ConfigStore:getMeta()
-				rowMeta.autoload = rowMeta.autoload == name and nil or name
+				if rowMeta.autoload == name then
+					rowMeta.autoload = nil
+				else
+					rowMeta.autoload = name
+				end
 				self.ConfigStore:setMeta(rowMeta)
 				if name == self.ConfigName then
 					syncAutoToggle()
