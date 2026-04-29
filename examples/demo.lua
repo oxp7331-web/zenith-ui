@@ -8,6 +8,7 @@ local Window = ZenithUI.new({
 	SettingsSubtitle = "theme, config and session controls",
 	SettingsButtonText = "Settings",
 	ConfigFolder = "ZenithUI",
+	DefaultTheme = "rose",
 	ToggleKey = Enum.KeyCode.RightShift,
 })
 
@@ -44,9 +45,17 @@ local Visuals = VisualsTab:AddSection("Visuals")
 Visuals:AddDropdown({
 	Id = "accent_mode",
 	Title = "Accent Preset",
-	Values = {"Ocean", "Graphite", "Ice", "Mint"},
+	Values = {"Ocean", "Graphite", "Mint", "Rose", "Amber"},
 	Default = "Ocean",
 	Callback = function(value)
+		local presets = {
+			Ocean = Color3.fromRGB(96, 168, 255),
+			Graphite = Color3.fromRGB(162, 172, 186),
+			Mint = Color3.fromRGB(102, 214, 181),
+			Rose = Color3.fromRGB(255, 128, 156),
+			Amber = Color3.fromRGB(255, 191, 94),
+		}
+		Window:SetAccentColor(presets[value] or presets.Ocean)
 		print("Accent:", value)
 	end,
 })

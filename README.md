@@ -24,6 +24,7 @@ local Window = ZenithUI.new({
     Title = "Zenith UI",
     Subtitle = "minimalist runtime panel",
     ConfigFolder = "ZenithUI",
+    DefaultTheme = "default",
     ToggleKey = Enum.KeyCode.RightShift,
 })
 
@@ -74,6 +75,7 @@ Options:
 - `Theme`
 - `ConfigFolder`
 - `DefaultConfig`
+- `DefaultTheme`
 - `ToggleKey`
 
 ### Window methods
@@ -84,6 +86,12 @@ Options:
 - `Window:LoadConfig(name)`
 - `Window:TryAutoload()`
 - `Window:Notify({ Title = "...", Content = "..." })`
+- `Window:GetTheme()`
+- `Window:SetTheme(themeTable)`
+- `Window:SetThemeColor(key, color)`
+- `Window:SetAccentColor(color)`
+- `Window:SaveTheme(name)`
+- `Window:LoadTheme(name)`
 - `Window:GetValue(id)`
 - `Window:SetValue(id, value)`
 - `Window:Toggle()`
@@ -105,10 +113,19 @@ If the executor supports `isfolder`, `makefolder`, `isfile`, `writefile` and `re
 ```text
 ZenithUI/
   configs/
+  themes/
   meta.json
 ```
 
 If those APIs are missing, the library still works, but config data only lives for the current session.
+
+Config payloads now store:
+
+- `flags`
+- `themeName`
+- `themeOverrides`
+
+Older flat config JSON files are still accepted and loaded as flag-only payloads.
 
 ## Shipping notes
 

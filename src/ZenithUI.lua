@@ -21,6 +21,18 @@ local DEFAULT_THEME = {
 	Danger = Color3.fromRGB(255, 102, 120),
 }
 
+local THEME_KEYS = {
+	"Background",
+	"Surface",
+	"SurfaceAlt",
+	"Stroke",
+	"Text",
+	"Muted",
+	"Accent",
+	"Success",
+	"Danger",
+}
+
 local ACCENT_PRESETS = {
 	Ocean = Color3.fromRGB(96, 168, 255),
 	Graphite = Color3.fromRGB(162, 172, 186),
@@ -93,6 +105,75 @@ local function cloneTable(source)
 	return result
 end
 
+local function clampByte(value)
+	return math.clamp(math.floor((tonumber(value) or 0) + 0.5), 0, 255)
+end
+
+local function color3ToRGB(color)
+	return {
+		r = clampByte(color.R * 255),
+		g = clampByte(color.G * 255),
+		b = clampByte(color.B * 255),
+	}
+end
+
+local function rgbToColor3(payload, fallback)
+	if typeof(payload) == "Color3" then
+		return payload
+	end
+	if type(payload) ~= "table" then
+		return fallback
+	end
+
+	local r = payload.r or payload.R or payload[1]
+	local g = payload.g or payload.G or payload[2]
+	local b = payload.b or payload.B or payload[3]
+	if r == nil or g == nil or b == nil then
+		return fallback
+	end
+
+	return Color3.fromRGB(clampByte(r), clampByte(g), clampByte(b))
+end
+
+local function serializeTheme(theme)
+	local payload = {}
+	for _, key in ipairs(THEME_KEYS) do
+		payload[key] = color3ToRGB(theme[key] or DEFAULT_THEME[key])
+	end
+	return payload
+end
+
+local function deserializeTheme(payload, fallback)
+	local theme = {}
+	local source = type(payload) == "table" and payload or {}
+	for _, key in ipairs(THEME_KEYS) do
+		theme[key] = rgbToColor3(source[key], fallback[key] or DEFAULT_THEME[key])
+	end
+	return theme
+end
+
+local function getThemeOverrides(theme, baseTheme)
+	local overrides = {}
+	for _, key in ipairs(THEME_KEYS) do
+		local current = theme[key]
+		local base = baseTheme[key]
+		if current and base and current ~= base then
+			overrides[key] = color3ToRGB(current)
+		end
+	end
+	return overrides
+end
+
+local function sanitizeStorageName(name, fallback)
+	local value = tostring(name or ""):gsub("[%c%z]", ""):gsub("[/\\:%*%?\"<>|]", "_")
+	value = value:gsub("^%s+", ""):gsub("%s+$", "")
+	value = value:gsub("%s+", "_")
+	if value == "" then
+		return fallback
+	end
+	return value
+end
+
 local function supportsFiles()
 	return type(isfolder) == "function"
 		and type(makefolder) == "function"
@@ -123,6 +204,7 @@ function ConfigStore.new(rootFolder)
 	self.rootFolder = rootFolder or "ZenithUI"
 	self.runtime = {
 		configs = {},
+		themes = {},
 		meta = {
 			autoload = nil,
 		},
@@ -136,13 +218,21 @@ function ConfigStore.new(rootFolder)
 		if not isfolder(configFolder) then
 			makefolder(configFolder)
 		end
+		local themeFolder = self.rootFolder .. "/themes"
+		if not isfolder(themeFolder) then
+			makefolder(themeFolder)
+		end
 	end
 
 	return self
 end
 
 function ConfigStore:getConfigPath(name)
-	return string.format("%s/configs/%s.json", self.rootFolder, name)
+	return string.format("%s/configs/%s.json", self.rootFolder, sanitizeStorageName(name, "default"))
+end
+
+function ConfigStore:getThemePath(name)
+	return string.format("%s/themes/%s.json", self.rootFolder, sanitizeStorageName(name, "default"))
 end
 
 function ConfigStore:getMetaPath()
@@ -172,6 +262,7 @@ function ConfigStore:list()
 end
 
 function ConfigStore:save(name, payload)
+	name = sanitizeStorageName(name, "default")
 	if supportsFiles() then
 		writefile(self:getConfigPath(name), safeJSONEncode(payload))
 	else
@@ -180,6 +271,7 @@ function ConfigStore:save(name, payload)
 end
 
 function ConfigStore:load(name)
+	name = sanitizeStorageName(name, "default")
 	if supportsFiles() then
 		local path = self:getConfigPath(name)
 		if not isfile(path) then
@@ -193,6 +285,7 @@ function ConfigStore:load(name)
 end
 
 function ConfigStore:delete(name)
+	name = sanitizeStorageName(name, "default")
 	if supportsFiles() then
 		local path = self:getConfigPath(name)
 		if isfile(path) and type(delfile) == "function" then
@@ -200,6 +293,63 @@ function ConfigStore:delete(name)
 		end
 	else
 		self.runtime.configs[name] = nil
+	end
+end
+
+function ConfigStore:listThemes()
+	if supportsFiles() and type(listfiles) == "function" then
+		local files = listfiles(self.rootFolder .. "/themes")
+		local names = {}
+		for _, filePath in ipairs(files) do
+			local name = filePath:match("([^/\\]+)%.json$")
+			if name then
+				table.insert(names, name)
+			end
+		end
+		table.sort(names)
+		return names
+	end
+
+	local names = {}
+	for name in pairs(self.runtime.themes) do
+		table.insert(names, name)
+	end
+	table.sort(names)
+	return names
+end
+
+function ConfigStore:saveTheme(name, payload)
+	name = sanitizeStorageName(name, "default")
+	if supportsFiles() then
+		writefile(self:getThemePath(name), safeJSONEncode(payload))
+	else
+		self.runtime.themes[name] = cloneTable(payload)
+	end
+end
+
+function ConfigStore:loadTheme(name)
+	name = sanitizeStorageName(name, "default")
+	if supportsFiles() then
+		local path = self:getThemePath(name)
+		if not isfile(path) then
+			return nil
+		end
+		return safeJSONDecode(readfile(path))
+	end
+
+	local payload = self.runtime.themes[name]
+	return payload and cloneTable(payload) or nil
+end
+
+function ConfigStore:deleteTheme(name)
+	name = sanitizeStorageName(name, "default")
+	if supportsFiles() then
+		local path = self:getThemePath(name)
+		if isfile(path) and type(delfile) == "function" then
+			delfile(path)
+		end
+	else
+		self.runtime.themes[name] = nil
 	end
 end
 
@@ -315,7 +465,10 @@ function ZenithUI.new(options)
 	options = options or {}
 
 	local self = setmetatable({}, Window)
+	self.DefaultThemeName = sanitizeStorageName(options.DefaultTheme or "default", "default")
+	self.BaseTheme = mergeTheme(DEFAULT_THEME, {})
 	self.Theme = mergeTheme(DEFAULT_THEME, options.Theme)
+	self.ActiveThemeName = nil
 	self.Title = options.Title or "Zenith UI"
 	self.Subtitle = options.Subtitle or "runtime panel"
 	self.SidebarTitle = options.SidebarTitle or "navigation"
@@ -342,9 +495,18 @@ function ZenithUI.new(options)
 	self.ConfigStore = ConfigStore.new(self.ConfigRoot)
 	self._connections = {}
 	self._lastAutoloadState = nil
+	self._themeEditors = {}
 
 	self:_build()
 	self:_wireToggleKey()
+	if #self.ConfigStore:listThemes() == 0 then
+		self:SaveTheme(self.DefaultThemeName)
+	end
+	if options.Theme then
+		self.ActiveThemeName = nil
+	else
+		self:LoadTheme(self.DefaultThemeName)
+	end
 	self:TryAutoload()
 
 	return self
@@ -402,11 +564,62 @@ function Window:_refreshTheme()
 end
 
 function Window:SetAccentColor(color)
-	self.Theme.Accent = color
+	self:SetThemeColor("Accent", color)
+end
+
+function Window:GetTheme()
+	return cloneTable(self.Theme)
+end
+
+function Window:SetTheme(themeTable)
+	self.Theme = deserializeTheme(themeTable, DEFAULT_THEME)
 	self:_refreshTheme()
+	if self._syncThemeEditors then
+		self._syncThemeEditors()
+	end
 	if self._refreshConfigs then
 		self._refreshConfigs()
 	end
+end
+
+function Window:SetThemeColor(key, color)
+	if not table.find(THEME_KEYS, key) or typeof(color) ~= "Color3" then
+		return
+	end
+	self.Theme[key] = color
+	self:_refreshTheme()
+	if self._syncThemeEditors then
+		self._syncThemeEditors(key)
+	end
+	if self._refreshConfigs then
+		self._refreshConfigs()
+	end
+end
+
+function Window:SaveTheme(name)
+	local safeName = sanitizeStorageName(name or self.ActiveThemeName or self.DefaultThemeName, self.DefaultThemeName)
+	self.ConfigStore:saveTheme(safeName, serializeTheme(self.Theme))
+	self.ActiveThemeName = safeName
+	if self._refreshConfigs then
+		self._refreshConfigs()
+	end
+	return safeName
+end
+
+function Window:LoadTheme(name)
+	local safeName = sanitizeStorageName(name or self.ActiveThemeName or self.DefaultThemeName, self.DefaultThemeName)
+	local payload = self.ConfigStore:loadTheme(safeName)
+	if not payload then
+		if safeName == self.DefaultThemeName then
+			self.ActiveThemeName = self.DefaultThemeName
+			self:SetTheme(DEFAULT_THEME)
+		end
+		return false
+	end
+
+	self.ActiveThemeName = safeName
+	self:SetTheme(deserializeTheme(payload, DEFAULT_THEME))
+	return true
 end
 
 function Window:SetTitle(text)
@@ -445,8 +658,8 @@ function Window:SetSettingsSubtitle(text)
 end
 
 function Window:SetActiveConfig(name)
-	self.ActiveConfigName = name
-	self.ConfigName = name or self.ConfigName
+	self.ActiveConfigName = name and sanitizeStorageName(name, self.ConfigName) or nil
+	self.ConfigName = self.ActiveConfigName or self.ConfigName
 	if self._refreshConfigs then
 		self._refreshConfigs()
 	end
@@ -707,36 +920,12 @@ function Window:_createConfigPanel()
 	self.SettingsSubtitleLabel = sub
 	self:_track("MutedTextObjects", sub, "TextColor3")
 
-	local appearanceLabel = createLabel(theme, "Accent", theme.Muted, UDim2.new(1, 0, 0, 16))
-	appearanceLabel.TextSize = 11
-	appearanceLabel.ZIndex = 11
-	appearanceLabel.LayoutOrder = 2
-	appearanceLabel.Parent = panel
-	self:_track("MutedTextObjects", appearanceLabel, "TextColor3")
-
-	local accentRow = create("Frame", {
-		BackgroundTransparency = 1,
-		Size = UDim2.new(1, 0, 0, 68),
-		ZIndex = 11,
-		LayoutOrder = 3,
-		Parent = panel,
-	})
-
-	create("UIGridLayout", {
-		CellPadding = UDim2.fromOffset(8, 8),
-		CellSize = UDim2.fromOffset(94, 30),
-		SortOrder = Enum.SortOrder.LayoutOrder,
-		Parent = accentRow,
-	})
-
-	for name, color in pairs(ACCENT_PRESETS) do
-		local accentButton = makeButton(theme, name, UDim2.fromOffset(94, 30))
-		accentButton.Parent = accentRow
-		table.insert(self.ButtonObjects, accentButton)
-		accentButton.MouseButton1Click:Connect(function()
-			self:SetAccentColor(color)
-		end)
-	end
+	local configLabel = createLabel(theme, "Configs", theme.Muted, UDim2.new(1, 0, 0, 16))
+	configLabel.TextSize = 11
+	configLabel.ZIndex = 11
+	configLabel.LayoutOrder = 2
+	configLabel.Parent = panel
+	self:_track("MutedTextObjects", configLabel, "TextColor3")
 
 	local input = create("TextBox", {
 		BackgroundColor3 = theme.SurfaceAlt,
@@ -750,7 +939,7 @@ function Window:_createConfigPanel()
 		TextColor3 = theme.Text,
 		TextSize = 13,
 		ZIndex = 11,
-		LayoutOrder = 4,
+		LayoutOrder = 3,
 		Parent = panel,
 	})
 	self:_track("SurfaceAltObjects", input, "BackgroundColor3")
@@ -764,7 +953,7 @@ function Window:_createConfigPanel()
 		BackgroundTransparency = 1,
 		Size = UDim2.new(1, 0, 0, 34),
 		ZIndex = 11,
-		LayoutOrder = 5,
+		LayoutOrder = 4,
 		Parent = panel,
 	})
 
@@ -797,7 +986,7 @@ function Window:_createConfigPanel()
 		TextColor3 = theme.Text,
 		TextSize = 13,
 		ZIndex = 11,
-		LayoutOrder = 6,
+		LayoutOrder = 5,
 		Parent = panel,
 	})
 	self:_track("SurfaceAltObjects", searchBox, "BackgroundColor3")
@@ -812,7 +1001,7 @@ function Window:_createConfigPanel()
 		BorderSizePixel = 0,
 		Size = UDim2.new(1, 0, 0, 70),
 		ZIndex = 11,
-		LayoutOrder = 7,
+		LayoutOrder = 6,
 		Parent = panel,
 	})
 	self:_track("SurfaceAltObjects", autoRow, "BackgroundColor3")
@@ -851,25 +1040,13 @@ function Window:_createConfigPanel()
 	self:_track("TextObjects", autoKnob, "BackgroundColor3")
 	corner(8).Parent = autoKnob
 
-	local autoClickProxy = create("TextButton", {
-		AnchorPoint = Vector2.new(1, 0.5),
-		AutoButtonColor = false,
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		Position = UDim2.new(1, -12, 0.5, 0),
-		Size = UDim2.fromOffset(40, 22),
-		Text = "",
-		ZIndex = 14,
-		Parent = autoRow,
-	})
-
 	local listFrame = create("Frame", {
 		BackgroundColor3 = theme.Background,
 		BorderSizePixel = 0,
 		AutomaticSize = Enum.AutomaticSize.Y,
 		Size = UDim2.new(1, 0, 0, 0),
 		ZIndex = 11,
-		LayoutOrder = 8,
+		LayoutOrder = 7,
 		Parent = panel,
 	})
 	create("UIListLayout", {
@@ -881,9 +1058,137 @@ function Window:_createConfigPanel()
 	corner(8).Parent = listFrame
 	padding(8, 8, 8, 8).Parent = listFrame
 
+	local themesLabel = createLabel(theme, "Themes", theme.Muted, UDim2.new(1, 0, 0, 16))
+	themesLabel.TextSize = 11
+	themesLabel.ZIndex = 11
+	themesLabel.LayoutOrder = 8
+	themesLabel.Parent = panel
+	self:_track("MutedTextObjects", themesLabel, "TextColor3")
+
+	local themeInput = create("TextBox", {
+		BackgroundColor3 = theme.SurfaceAlt,
+		BorderSizePixel = 0,
+		ClearTextOnFocus = false,
+		Font = Enum.Font.Gotham,
+		PlaceholderColor3 = theme.Muted,
+		PlaceholderText = "theme name",
+		Size = UDim2.new(1, 0, 0, 36),
+		Text = self.ActiveThemeName or self.DefaultThemeName,
+		TextColor3 = theme.Text,
+		TextSize = 13,
+		ZIndex = 11,
+		LayoutOrder = 9,
+		Parent = panel,
+	})
+	self:_track("SurfaceAltObjects", themeInput, "BackgroundColor3")
+	self:_track("TextObjects", themeInput, "TextColor3")
+	self:_track("MutedTextObjects", themeInput, "PlaceholderColor3")
+	corner(8).Parent = themeInput
+	self:_track("StrokeObjects", stroke(theme.Stroke, 1, 0.15), "Color").Parent = themeInput
+	padding(0, 12, 0, 12).Parent = themeInput
+
+	local themeButtonRow = create("Frame", {
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 34),
+		ZIndex = 11,
+		LayoutOrder = 10,
+		Parent = panel,
+	})
+
+	create("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		Padding = UDim.new(0, 8),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = themeButtonRow,
+	})
+
+	local themeSave = makeButton(theme, "Tema Kaydet", UDim2.fromOffset(120, 34))
+	local themeLoad = makeButton(theme, "Tema Yukle", UDim2.fromOffset(120, 34))
+	local themeRefresh = makeButton(theme, "Temalari Yenile", UDim2.fromOffset(130, 34))
+	themeSave.Parent = themeButtonRow
+	themeLoad.Parent = themeButtonRow
+	themeRefresh.Parent = themeButtonRow
+	table.insert(self.ButtonObjects, themeSave)
+	table.insert(self.ButtonObjects, themeLoad)
+	table.insert(self.ButtonObjects, themeRefresh)
+
+	local presetLabel = createLabel(theme, "Accent Presets", theme.Muted, UDim2.new(1, 0, 0, 16))
+	presetLabel.TextSize = 11
+	presetLabel.ZIndex = 11
+	presetLabel.LayoutOrder = 11
+	presetLabel.Parent = panel
+	self:_track("MutedTextObjects", presetLabel, "TextColor3")
+
+	local accentRow = create("Frame", {
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 68),
+		ZIndex = 11,
+		LayoutOrder = 12,
+		Parent = panel,
+	})
+
+	create("UIGridLayout", {
+		CellPadding = UDim2.fromOffset(8, 8),
+		CellSize = UDim2.fromOffset(94, 30),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = accentRow,
+	})
+
+	for name, color in pairs(ACCENT_PRESETS) do
+		local accentButton = makeButton(theme, name, UDim2.fromOffset(94, 30))
+		accentButton.Parent = accentRow
+		table.insert(self.ButtonObjects, accentButton)
+		accentButton.MouseButton1Click:Connect(function()
+			self:SetAccentColor(color)
+		end)
+	end
+
+	local themeListFrame = create("Frame", {
+		BackgroundColor3 = theme.Background,
+		BorderSizePixel = 0,
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Size = UDim2.new(1, 0, 0, 0),
+		ZIndex = 11,
+		LayoutOrder = 13,
+		Parent = panel,
+	})
+	create("UIListLayout", {
+		Padding = UDim.new(0, 6),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = themeListFrame,
+	})
+	self:_track("BackgroundObjects", themeListFrame, "BackgroundColor3")
+	corner(8).Parent = themeListFrame
+	padding(8, 8, 8, 8).Parent = themeListFrame
+
+	local editorLabel = createLabel(theme, "Theme Colors", theme.Muted, UDim2.new(1, 0, 0, 16))
+	editorLabel.TextSize = 11
+	editorLabel.ZIndex = 11
+	editorLabel.LayoutOrder = 14
+	editorLabel.Parent = panel
+	self:_track("MutedTextObjects", editorLabel, "TextColor3")
+
+	local editorFrame = create("Frame", {
+		BackgroundColor3 = theme.Background,
+		BorderSizePixel = 0,
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Size = UDim2.new(1, 0, 0, 0),
+		ZIndex = 11,
+		LayoutOrder = 15,
+		Parent = panel,
+	})
+	create("UIListLayout", {
+		Padding = UDim.new(0, 8),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = editorFrame,
+	})
+	self:_track("BackgroundObjects", editorFrame, "BackgroundColor3")
+	corner(8).Parent = editorFrame
+	padding(10, 10, 10, 10).Parent = editorFrame
+
 	local unload = makeButton(theme, "Unload", UDim2.new(1, 0, 0, 34))
 	unload.ZIndex = 11
-	unload.LayoutOrder = 9
+	unload.LayoutOrder = 16
 	unload.Parent = panel
 	table.insert(self.ButtonObjects, unload)
 
@@ -893,7 +1198,7 @@ function Window:_createConfigPanel()
 		Size = UDim2.new(1, 0, 0, 34),
 		Visible = false,
 		ZIndex = 12,
-		LayoutOrder = 9,
+		LayoutOrder = 17,
 		Parent = panel,
 	})
 	self:_track("SurfaceAltObjects", confirmRow, "BackgroundColor3")
@@ -922,6 +1227,7 @@ function Window:_createConfigPanel()
 	table.insert(self.ButtonObjects, confirmNo)
 
 	local pendingConfirmAction = nil
+	local syncingEditors = false
 
 	local function hideConfirm()
 		pendingConfirmAction = nil
@@ -944,6 +1250,228 @@ function Window:_createConfigPanel()
 		TweenService:Create(autoKnob, TweenInfo.new(0.15), {
 			Position = active and UDim2.new(1, -19, 0.5, 0) or UDim2.fromOffset(3, 11),
 		}):Play()
+	end
+
+	local function syncThemeInput()
+		themeInput.Text = self.ActiveThemeName or self.DefaultThemeName
+	end
+
+	local function refreshThemeEditors(targetKey)
+		syncingEditors = true
+		for key, channels in pairs(self._themeEditors) do
+			if not targetKey or targetKey == key then
+				local color = self.Theme[key] or DEFAULT_THEME[key]
+				local values = {
+					r = clampByte(color.R * 255),
+					g = clampByte(color.G * 255),
+					b = clampByte(color.B * 255),
+				}
+				for channel, editor in pairs(channels) do
+					editor.SetVisual(values[channel] or 0)
+				end
+			end
+		end
+		syncingEditors = false
+	end
+
+	self._syncThemeEditors = refreshThemeEditors
+
+	for _, key in ipairs(THEME_KEYS) do
+		local row = create("Frame", {
+			BackgroundColor3 = theme.SurfaceAlt,
+			BorderSizePixel = 0,
+			Size = UDim2.new(1, 0, 0, 76),
+			ZIndex = 11,
+			Parent = editorFrame,
+		})
+		self:_track("SurfaceAltObjects", row, "BackgroundColor3")
+		corner(8).Parent = row
+		self:_track("StrokeObjects", stroke(theme.Stroke, 1, 0.15), "Color").Parent = row
+		padding(10, 10, 10, 10).Parent = row
+
+		local rowLabel = createLabel(theme, key, theme.Text, UDim2.new(1, 0, 0, 16))
+		rowLabel.Font = Enum.Font.GothamBold
+		rowLabel.ZIndex = 12
+		rowLabel.Parent = row
+		self:_track("TextObjects", rowLabel, "TextColor3")
+
+		local channels = {}
+		self._themeEditors[key] = channels
+		local channelOrder = {
+			{ label = "R", name = "r", color = Color3.fromRGB(255, 96, 96), x = 0 },
+			{ label = "G", name = "g", color = Color3.fromRGB(104, 224, 148), x = 0.333 },
+			{ label = "B", name = "b", color = Color3.fromRGB(92, 166, 255), x = 0.666 },
+		}
+
+		for _, channelInfo in ipairs(channelOrder) do
+			local label = createLabel(theme, channelInfo.label, theme.Muted, UDim2.fromOffset(18, 14))
+			label.Position = UDim2.new(channelInfo.x, 0, 0, 24)
+			label.ZIndex = 12
+			label.Parent = row
+			self:_track("MutedTextObjects", label, "TextColor3")
+
+			local bar = create("Frame", {
+				BackgroundColor3 = theme.Background,
+				BorderSizePixel = 0,
+				Position = UDim2.new(channelInfo.x, 20, 0, 28),
+				Size = UDim2.new(0.29, -34, 0, 8),
+				ZIndex = 12,
+				Parent = row,
+			})
+			self:_track("BackgroundObjects", bar, "BackgroundColor3")
+			corner(4).Parent = bar
+
+			local fill = create("Frame", {
+				BackgroundColor3 = channelInfo.color,
+				BorderSizePixel = 0,
+				Size = UDim2.fromScale(0, 1),
+				ZIndex = 13,
+				Parent = bar,
+			})
+			corner(4).Parent = fill
+
+			local hitbox = create("TextButton", {
+				BackgroundTransparency = 1,
+				Size = UDim2.new(1, 0, 1, 8),
+				Text = "",
+				ZIndex = 14,
+				Parent = bar,
+			})
+
+			local valueLabel = createLabel(theme, "0", theme.Text, UDim2.fromOffset(28, 14))
+			valueLabel.AnchorPoint = Vector2.new(1, 0)
+			valueLabel.Position = UDim2.new(channelInfo.x + 0.29, -4, 0, 22)
+			valueLabel.TextXAlignment = Enum.TextXAlignment.Right
+			valueLabel.ZIndex = 12
+			valueLabel.Parent = row
+			self:_track("TextObjects", valueLabel, "TextColor3")
+
+			local dragging = false
+
+			local function applyChannel(value)
+				if syncingEditors then
+					return
+				end
+				local rgb = color3ToRGB(self.Theme[key] or DEFAULT_THEME[key])
+				rgb[channelInfo.name] = clampByte(value)
+				self:SetThemeColor(key, Color3.fromRGB(rgb.r, rgb.g, rgb.b))
+			end
+
+			local function applyFromPosition(x)
+				local alpha = math.clamp((x - bar.AbsolutePosition.X) / math.max(bar.AbsoluteSize.X, 1), 0, 1)
+				applyChannel(alpha * 255)
+			end
+
+			hitbox.InputBegan:Connect(function(inputObject)
+				if inputObject.UserInputType == Enum.UserInputType.MouseButton1 then
+					dragging = true
+					applyFromPosition(inputObject.Position.X)
+				end
+			end)
+
+			hitbox.InputEnded:Connect(function(inputObject)
+				if inputObject.UserInputType == Enum.UserInputType.MouseButton1 then
+					dragging = false
+				end
+			end)
+
+			UserInputService.InputChanged:Connect(function(inputObject)
+				if dragging and inputObject.UserInputType == Enum.UserInputType.MouseMovement then
+					applyFromPosition(inputObject.Position.X)
+				end
+			end)
+
+			local function setVisual(value)
+				local safeValue = clampByte(value)
+				fill.Size = UDim2.fromScale(safeValue / 255, 1)
+				valueLabel.Text = tostring(safeValue)
+			end
+
+			channels[channelInfo.name] = {
+				SetVisual = setVisual,
+			}
+		end
+	end
+
+	local function refreshThemeList()
+		for _, child in ipairs(themeListFrame:GetChildren()) do
+			if child:IsA("Frame") then
+				child:Destroy()
+			end
+		end
+
+		syncThemeInput()
+
+		for _, name in ipairs(self.ConfigStore:listThemes()) do
+			local item = create("Frame", {
+				BackgroundColor3 = theme.SurfaceAlt,
+				BorderSizePixel = 0,
+				Size = UDim2.new(1, 0, 0, 58),
+				ZIndex = 11,
+				Parent = themeListFrame,
+			})
+			self:_track("SurfaceAltObjects", item, "BackgroundColor3")
+			corner(8).Parent = item
+			self:_track("StrokeObjects", stroke(theme.Stroke, 1, 0.15), "Color").Parent = item
+
+			local nameLabel = createLabel(theme, name, self.ActiveThemeName == name and theme.Text or theme.Text, UDim2.new(1, -164, 0, 18))
+			nameLabel.Position = UDim2.fromOffset(14, 8)
+			nameLabel.ZIndex = 12
+			nameLabel.Font = self.ActiveThemeName == name and Enum.Font.GothamBold or Enum.Font.Gotham
+			nameLabel.Parent = item
+			self:_track("TextObjects", nameLabel, "TextColor3")
+
+			local loadButton = makeButton(theme, "Use", UDim2.fromOffset(56, 24))
+			loadButton.AnchorPoint = Vector2.new(1, 0)
+			loadButton.Position = UDim2.new(1, -8, 0, 8)
+			loadButton.ZIndex = 14
+			loadButton.Parent = item
+			table.insert(self.ButtonObjects, loadButton)
+
+			local overwriteButton = makeButton(theme, "Yaz", UDim2.fromOffset(42, 20))
+			overwriteButton.AnchorPoint = Vector2.new(1, 0)
+			overwriteButton.Position = UDim2.new(1, -56, 0, 32)
+			overwriteButton.ZIndex = 14
+			overwriteButton.TextSize = 11
+			overwriteButton.Parent = item
+			table.insert(self.ButtonObjects, overwriteButton)
+
+			local deleteButton = makeButton(theme, "Sil", UDim2.fromOffset(42, 20))
+			deleteButton.AnchorPoint = Vector2.new(1, 0)
+			deleteButton.Position = UDim2.new(1, -8, 0, 32)
+			deleteButton.ZIndex = 14
+			deleteButton.TextSize = 11
+			deleteButton.Parent = item
+			table.insert(self.ButtonObjects, deleteButton)
+
+			loadButton.MouseButton1Click:Connect(function()
+				themeInput.Text = name
+				self:LoadTheme(name)
+				refreshThemeEditors()
+				refreshThemeList()
+			end)
+
+			overwriteButton.MouseButton1Click:Connect(function()
+				showConfirm(string.format("%s temasina yazilsin?", name), function()
+					themeInput.Text = self:SaveTheme(name)
+					refreshThemeList()
+					hideConfirm()
+				end)
+			end)
+
+			deleteButton.MouseButton1Click:Connect(function()
+				showConfirm(string.format("%s temasi silinsin?", name), function()
+					self.ConfigStore:deleteTheme(name)
+					if self.ActiveThemeName == name then
+						self.ActiveThemeName = self.DefaultThemeName
+						self:SetTheme(DEFAULT_THEME)
+						themeInput.Text = self.DefaultThemeName
+					end
+					refreshThemeList()
+					hideConfirm()
+				end)
+			end)
+		end
 	end
 
 	local function refreshConfigList()
@@ -1018,27 +1546,6 @@ function Window:_createConfigPanel()
 				Parent = rowAuto,
 			})
 			corner(7).Parent = rowKnob
-
-			local rowClickProxy = create("TextButton", {
-				AnchorPoint = Vector2.new(1, 0),
-				AutoButtonColor = false,
-				BackgroundTransparency = 1,
-				BorderSizePixel = 0,
-				Position = UDim2.new(1, -106, 0, 34),
-				Size = UDim2.fromOffset(34, 18),
-				Text = "",
-				ZIndex = 15,
-				Parent = item,
-			})
-			rowClickProxy.MouseButton1Click:Connect(function()
-				local rowMeta = self.ConfigStore:getMeta()
-				rowMeta.autoload = rowMeta.autoload == name and nil or name
-				self.ConfigStore:setMeta(rowMeta)
-				if name == self.ConfigName then
-					syncAutoToggle()
-				end
-				refreshConfigList()
-			end)
 
 			local autoText = createLabel(theme, "Autoload", theme.Muted, UDim2.fromOffset(64, 16))
 			autoText.Position = UDim2.new(1, -174, 0, 35)
@@ -1126,19 +1633,22 @@ function Window:_createConfigPanel()
 
 	input.FocusLost:Connect(function()
 		if input.Text ~= "" then
-			self.ConfigName = input.Text
+			self.ConfigName = sanitizeStorageName(input.Text, self.ConfigName)
+			input.Text = self.ConfigName
 			syncAutoToggle()
 		end
 	end)
 
 	save.MouseButton1Click:Connect(function()
-		self.ConfigName = input.Text ~= "" and input.Text or self.ConfigName
+		self.ConfigName = sanitizeStorageName(input.Text ~= "" and input.Text or self.ConfigName, self.ConfigName)
+		input.Text = self.ConfigName
 		self:SaveConfig(self.ConfigName)
 		refreshConfigList()
 	end)
 
 	load.MouseButton1Click:Connect(function()
-		self.ConfigName = input.Text ~= "" and input.Text or self.ConfigName
+		self.ConfigName = sanitizeStorageName(input.Text ~= "" and input.Text or self.ConfigName, self.ConfigName)
+		input.Text = self.ConfigName
 		self:LoadConfig(self.ConfigName)
 		refreshConfigList()
 	end)
@@ -1156,7 +1666,8 @@ function Window:_createConfigPanel()
 	confirmNo.MouseButton1Click:Connect(hideConfirm)
 
 	local function onAutoToggleClick()
-		self.ConfigName = input.Text ~= "" and input.Text or self.ConfigName
+		self.ConfigName = sanitizeStorageName(input.Text ~= "" and input.Text or self.ConfigName, self.ConfigName)
+		input.Text = self.ConfigName
 		local meta = self.ConfigStore:getMeta()
 		local shouldEnable = meta.autoload ~= self.ConfigName
 		meta.autoload = shouldEnable and self.ConfigName or nil
@@ -1164,9 +1675,37 @@ function Window:_createConfigPanel()
 		syncAutoToggle()
 	end
 	autoToggle.MouseButton1Click:Connect(onAutoToggleClick)
-	autoClickProxy.MouseButton1Click:Connect(onAutoToggleClick)
 
-	self._refreshConfigs = refreshConfigList
+	themeInput.FocusLost:Connect(function()
+		if themeInput.Text ~= "" then
+			themeInput.Text = sanitizeStorageName(themeInput.Text, self.DefaultThemeName)
+		end
+	end)
+
+	themeSave.MouseButton1Click:Connect(function()
+		local savedName = self:SaveTheme(themeInput.Text ~= "" and themeInput.Text or self.ActiveThemeName or self.DefaultThemeName)
+		themeInput.Text = savedName
+		refreshThemeList()
+	end)
+
+	themeLoad.MouseButton1Click:Connect(function()
+		local targetName = sanitizeStorageName(themeInput.Text ~= "" and themeInput.Text or self.ActiveThemeName or self.DefaultThemeName, self.DefaultThemeName)
+		self:LoadTheme(targetName)
+		refreshThemeEditors()
+		refreshThemeList()
+	end)
+
+	themeRefresh.MouseButton1Click:Connect(function()
+		refreshThemeEditors()
+		refreshThemeList()
+	end)
+
+	self._refreshConfigs = function()
+		refreshConfigList()
+		refreshThemeList()
+	end
+	refreshThemeEditors()
+	refreshThemeList()
 	refreshConfigList()
 	return panel
 end
@@ -1220,15 +1759,42 @@ function Window:GetValue(id)
 end
 
 function Window:CollectConfig()
-	local payload = {}
+	local flags = {}
 	for id in pairs(self.Controls) do
-		payload[id] = self.Flags[id]
+		flags[id] = self.Flags[id]
 	end
-	return payload
+	local baseTheme = DEFAULT_THEME
+	if self.ActiveThemeName then
+		local stored = self.ConfigStore:loadTheme(self.ActiveThemeName)
+		if stored then
+			baseTheme = deserializeTheme(stored, DEFAULT_THEME)
+		end
+	end
+	return {
+		flags = flags,
+		themeName = self.ActiveThemeName,
+		themeOverrides = getThemeOverrides(self.Theme, baseTheme),
+	}
 end
 
 function Window:ApplyConfig(payload)
-	for id, value in pairs(payload or {}) do
+	if type(payload) ~= "table" then
+		return
+	end
+
+	local flags = payload
+	if payload.flags then
+		flags = payload.flags
+		if payload.themeName and not self:LoadTheme(payload.themeName) then
+			self:SetTheme(DEFAULT_THEME)
+			self.ActiveThemeName = self.DefaultThemeName
+		end
+		if payload.themeOverrides then
+			self:SetTheme(mergeTheme(self.Theme, deserializeTheme(payload.themeOverrides, self.Theme)))
+		end
+	end
+
+	for id, value in pairs(flags or {}) do
 		if self.Controls[id] then
 			self:SetValue(id, value)
 		end
@@ -1236,18 +1802,20 @@ function Window:ApplyConfig(payload)
 end
 
 function Window:SaveConfig(name)
-	name = name or self.ConfigName
+	name = sanitizeStorageName(name or self.ConfigName, self.ConfigName)
+	self.ConfigName = name
 	self.ConfigStore:save(name, self:CollectConfig())
 	self:SetActiveConfig(name)
 end
 
 function Window:LoadConfig(name)
-	name = name or self.ConfigName
+	name = sanitizeStorageName(name or self.ConfigName, self.ConfigName)
 	local payload = self.ConfigStore:load(name)
 	if not payload then
 		return
 	end
 
+	self.ConfigName = name
 	self:ApplyConfig(payload)
 	self:SetActiveConfig(name)
 end
@@ -1256,7 +1824,9 @@ function Window:TryAutoload()
 	local meta = self.ConfigStore:getMeta()
 	if meta.autoload then
 		task.defer(function()
-			self:LoadConfig(meta.autoload)
+			pcall(function()
+				self:LoadConfig(meta.autoload)
+			end)
 		end)
 	end
 end
@@ -1500,7 +2070,7 @@ function Section:AddToggle(options)
 
 	self:_registerControl({
 		Id = id,
-		Default = options.Default or false,
+		Default = options.Default ~= nil and options.Default or false,
 		Callback = options.Callback,
 		SetVisual = setVisual,
 	})
@@ -1600,7 +2170,7 @@ function Section:AddSlider(options)
 
 	self:_registerControl({
 		Id = id,
-		Default = options.Default or min,
+		Default = options.Default ~= nil and options.Default or min,
 		Callback = options.Callback,
 		SetVisual = setVisual,
 	})
@@ -1657,7 +2227,7 @@ function Section:AddInput(options)
 
 	self:_registerControl({
 		Id = id,
-		Default = options.Default or "",
+		Default = options.Default ~= nil and options.Default or "",
 		Callback = options.Callback,
 		SetVisual = setVisual,
 	})
@@ -1741,7 +2311,7 @@ function Section:AddDropdown(options)
 
 	self:_registerControl({
 		Id = id,
-		Default = options.Default or values[1] or "",
+		Default = options.Default ~= nil and options.Default or values[1] or "",
 		Callback = options.Callback,
 		SetVisual = setVisual,
 	})
