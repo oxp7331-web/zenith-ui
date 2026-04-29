@@ -429,19 +429,38 @@ local function makeButton(theme, text, size)
 		TextSize = 13,
 	})
 	corner(8).Parent = button
-	stroke(theme.Stroke, 1, 0.15).Parent = button
+	local btnStroke = stroke(theme.Stroke, 1, 0.15)
+	btnStroke.Parent = button
 
 	button.MouseEnter:Connect(function()
-		TweenService:Create(button, TweenInfo.new(0.15), {
-			BackgroundColor3 = theme.Accent,
-			TextColor3 = Color3.fromRGB(255, 255, 255),
+		TweenService:Create(button, TweenInfo.new(0.12), {
+			TextColor3 = theme.Accent,
+		}):Play()
+		TweenService:Create(btnStroke, TweenInfo.new(0.12), {
+			Color = theme.Accent,
+			Transparency = 0,
 		}):Play()
 	end)
 
 	button.MouseLeave:Connect(function()
-		TweenService:Create(button, TweenInfo.new(0.15), {
-			BackgroundColor3 = theme.SurfaceAlt,
+		TweenService:Create(button, TweenInfo.new(0.12), {
 			TextColor3 = theme.Text,
+		}):Play()
+		TweenService:Create(btnStroke, TweenInfo.new(0.12), {
+			Color = theme.Stroke,
+			Transparency = 0.15,
+		}):Play()
+	end)
+
+	button.MouseButton1Down:Connect(function()
+		TweenService:Create(button, TweenInfo.new(0.08), {
+			BackgroundTransparency = 0.25,
+		}):Play()
+	end)
+
+	button.MouseButton1Up:Connect(function()
+		TweenService:Create(button, TweenInfo.new(0.12), {
+			BackgroundTransparency = 0,
 		}):Play()
 	end)
 
@@ -578,11 +597,17 @@ function Window:_refreshTheme()
 	for _, tab in ipairs(self.Tabs) do
 		if tab.Button and tab.Button.Parent then
 			if tab == self.SelectedTab then
-				tab.Button.BackgroundColor3 = self.Theme.Accent
-				tab.Button.TextColor3 = Color3.fromRGB(255, 255, 255)
+				tab.Button.BackgroundColor3 = self.Theme.SurfaceAlt
+				tab.Button.TextColor3 = self.Theme.Text
+				if tab.Indicator then
+					tab.Indicator.BackgroundTransparency = 0
+				end
 			else
 				tab.Button.BackgroundColor3 = self.Theme.Background
 				tab.Button.TextColor3 = self.Theme.Muted
+				if tab.Indicator then
+					tab.Indicator.BackgroundTransparency = 1
+				end
 			end
 		end
 	end
@@ -2054,11 +2079,25 @@ function Window:AddTab(options)
 		Text = options.Title or "Tab",
 		TextColor3 = theme.Muted,
 		TextSize = 13,
+		TextXAlignment = Enum.TextXAlignment.Left,
 		Parent = self.Sidebar,
 	})
+	padding(0, 12, 0, 18).Parent = button
 	self:_track("BackgroundObjects", button, "BackgroundColor3")
 	self:_track("MutedTextObjects", button, "TextColor3")
 	corner(8).Parent = button
+
+	local indicator = create("Frame", {
+		AnchorPoint = Vector2.new(0, 0.5),
+		BackgroundColor3 = theme.Accent,
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Position = UDim2.new(0, 6, 0.5, 0),
+		Size = UDim2.fromOffset(3, 16),
+		Parent = button,
+	})
+	self:_track("AccentObjects", indicator, "BackgroundColor3")
+	corner(2).Parent = indicator
 
 	local page = create("ScrollingFrame", {
 		Active = true,
@@ -2090,20 +2129,51 @@ function Window:AddTab(options)
 		self.SelectedTab = tab
 		for _, other in ipairs(self.Tabs) do
 			other.Page.Visible = false
-			other.Button.BackgroundColor3 = theme.Background
-			other.Button.TextColor3 = theme.Muted
+			if other ~= tab then
+				TweenService:Create(other.Button, TweenInfo.new(0.15), {
+					BackgroundColor3 = self.Theme.Background,
+					TextColor3 = self.Theme.Muted,
+				}):Play()
+				if other.Indicator then
+					TweenService:Create(other.Indicator, TweenInfo.new(0.15), {
+						BackgroundTransparency = 1,
+					}):Play()
+				end
+			end
 		end
 
 		page.Visible = true
-		button.BackgroundColor3 = theme.Accent
-		button.TextColor3 = Color3.fromRGB(255, 255, 255)
+		TweenService:Create(button, TweenInfo.new(0.15), {
+			BackgroundColor3 = self.Theme.SurfaceAlt,
+			TextColor3 = self.Theme.Text,
+		}):Play()
+		TweenService:Create(indicator, TweenInfo.new(0.15), {
+			BackgroundTransparency = 0,
+		}):Play()
 
 		self.ConfigPanel.Visible = false
 		self.Pages.Visible = true
 	end
 
+	button.MouseEnter:Connect(function()
+		if self.SelectedTab ~= tab then
+			TweenService:Create(button, TweenInfo.new(0.12), {
+				TextColor3 = self.Theme.Text,
+			}):Play()
+		end
+	end)
+
+	button.MouseLeave:Connect(function()
+		if self.SelectedTab ~= tab then
+			TweenService:Create(button, TweenInfo.new(0.12), {
+				TextColor3 = self.Theme.Muted,
+			}):Play()
+		end
+	end)
+
 	button.MouseButton1Click:Connect(selectTab)
 
+	tab.Indicator = indicator
 	table.insert(self.Tabs, tab)
 	if #self.Tabs == 1 then
 		selectTab()
@@ -2278,8 +2348,8 @@ function Section:AddSlider(options)
 	local bar = create("Frame", {
 		BackgroundColor3 = theme.SurfaceAlt,
 		BorderSizePixel = 0,
-		Position = UDim2.fromOffset(12, 30),
-		Size = UDim2.new(1, -24, 0, 8),
+		Position = UDim2.fromOffset(0, 30),
+		Size = UDim2.new(1, 0, 0, 8),
 		Parent = frame,
 	})
 	self.Window:_track("SurfaceAltObjects", bar, "BackgroundColor3")
@@ -2294,9 +2364,23 @@ function Section:AddSlider(options)
 	self.Window:_track("AccentObjects", fill, "BackgroundColor3")
 	corner(4).Parent = fill
 
+	local thumb = create("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = theme.Text,
+		BorderSizePixel = 0,
+		Position = UDim2.new(0, 0, 0.5, 0),
+		Size = UDim2.fromOffset(12, 12),
+		ZIndex = 3,
+		Parent = fill,
+	})
+	self.Window:_track("TextObjects", thumb, "BackgroundColor3")
+	corner(6).Parent = thumb
+	self.Window:_track("AccentObjects", stroke(theme.Accent, 2, 0), "Color").Parent = thumb
+
 	local hitbox = create("TextButton", {
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, 0, 1, 8),
+		Position = UDim2.fromOffset(0, -6),
+		Size = UDim2.new(1, 0, 1, 12),
 		Text = "",
 		Parent = bar,
 	})
@@ -2332,8 +2416,9 @@ function Section:AddSlider(options)
 	end)
 
 	local function setVisual(value)
-		local alpha = (value - min) / (max - min)
-		fill.Size = UDim2.fromScale(math.clamp(alpha, 0, 1), 1)
+		local alpha = math.clamp((value - min) / (max - min), 0, 1)
+		fill.Size = UDim2.fromScale(alpha, 1)
+		thumb.Position = UDim2.new(1, 0, 0.5, 0)
 		valueLabel.Text = formatValue(value, decimals)
 	end
 
@@ -2353,7 +2438,7 @@ function Section:AddInput(options)
 	local frame = create("Frame", {
 		BackgroundColor3 = theme.Background,
 		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0, 72),
+		Size = UDim2.new(1, 0, 0, 76),
 		Parent = self.Frame,
 	})
 	self.Window:_track("BackgroundObjects", frame, "BackgroundColor3")
@@ -2372,8 +2457,8 @@ function Section:AddInput(options)
 		Font = Enum.Font.Gotham,
 		PlaceholderColor3 = theme.Muted,
 		PlaceholderText = options.Placeholder or "",
-		Position = UDim2.fromOffset(12, 30),
-		Size = UDim2.new(1, -24, 0, 30),
+		Position = UDim2.fromOffset(0, 30),
+		Size = UDim2.new(1, 0, 0, 32),
 		Text = "",
 		TextColor3 = theme.Text,
 		TextSize = 13,
@@ -2383,10 +2468,22 @@ function Section:AddInput(options)
 	self.Window:_track("TextObjects", box, "TextColor3")
 	self.Window:_track("MutedTextObjects", box, "PlaceholderColor3")
 	corner(8).Parent = box
-	self.Window:_track("StrokeObjects", stroke(theme.Stroke, 1, 0.15), "Color").Parent = box
-	padding(0, 10, 0, 10).Parent = box
+	local focusStroke = stroke(theme.Stroke, 1, 0.15)
+	self.Window:_track("StrokeObjects", focusStroke, "Color").Parent = box
+	padding(0, 12, 0, 12).Parent = box
+
+	box.Focused:Connect(function()
+		TweenService:Create(focusStroke, TweenInfo.new(0.15), {
+			Color = self.Window.Theme.Accent,
+			Transparency = 0,
+		}):Play()
+	end)
 
 	box.FocusLost:Connect(function()
+		TweenService:Create(focusStroke, TweenInfo.new(0.15), {
+			Color = self.Window.Theme.Stroke,
+			Transparency = 0.15,
+		}):Play()
 		self.Window:SetValue(id, box.Text)
 	end)
 
@@ -2429,11 +2526,12 @@ function Section:AddDropdown(options)
 		AutoButtonColor = false,
 		BackgroundColor3 = theme.SurfaceAlt,
 		BorderSizePixel = 0,
-		Position = UDim2.fromOffset(12, 30),
-		Size = UDim2.new(1, -24, 0, 30),
+		Position = UDim2.fromOffset(0, 30),
+		Size = UDim2.new(1, 0, 0, 32),
 		Text = "",
 		TextColor3 = theme.Text,
 		TextSize = 13,
+		TextXAlignment = Enum.TextXAlignment.Left,
 		Font = Enum.Font.Gotham,
 		Parent = frame,
 	})
@@ -2441,12 +2539,26 @@ function Section:AddDropdown(options)
 	self.Window:_track("TextObjects", current, "TextColor3")
 	corner(8).Parent = current
 	self.Window:_track("StrokeObjects", stroke(theme.Stroke, 1, 0.15), "Color").Parent = current
+	create("UIPadding", {
+		PaddingLeft = UDim.new(0, 12),
+		PaddingRight = UDim.new(0, 32),
+		Parent = current,
+	})
+
+	local chevron = createLabel(theme, "v", theme.Muted, UDim2.fromOffset(16, 16))
+	chevron.AnchorPoint = Vector2.new(1, 0.5)
+	chevron.Position = UDim2.new(1, -10, 0, 46)
+	chevron.Font = Enum.Font.GothamBold
+	chevron.TextSize = 12
+	chevron.ZIndex = 5
+	chevron.Parent = frame
+	self.Window:_track("MutedTextObjects", chevron, "TextColor3")
 
 	local list = create("Frame", {
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(12, 66),
-		Size = UDim2.new(1, -24, 0, 0),
+		Position = UDim2.fromOffset(0, 68),
+		Size = UDim2.new(1, 0, 0, 0),
 		Visible = false,
 		Parent = frame,
 	})
@@ -2472,6 +2584,7 @@ function Section:AddDropdown(options)
 	current.MouseButton1Click:Connect(function()
 		opened = not opened
 		list.Visible = opened
+		chevron.Text = opened and "^" or "v"
 	end)
 
 	local function setVisual(value)
