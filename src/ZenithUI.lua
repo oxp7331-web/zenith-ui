@@ -445,6 +445,7 @@ local function makeButton(theme, text, size)
 	button.MouseLeave:Connect(function()
 		TweenService:Create(button, TweenInfo.new(0.12), {
 			TextColor3 = theme.Text,
+			BackgroundTransparency = 0,
 		}):Play()
 		TweenService:Create(btnStroke, TweenInfo.new(0.12), {
 			Color = theme.Stroke,
@@ -2578,6 +2579,7 @@ function Section:AddDropdown(options)
 			self.Window:SetValue(id, value)
 			opened = false
 			list.Visible = false
+			chevron.Text = "v"
 		end)
 	end
 
